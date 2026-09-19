@@ -17,26 +17,36 @@ This guide describes how to set up and run the MomentForeverApp project.
     - Open a terminal in VS Code (Ctrl+`).
     - Run the following command to download all dependencies and build the project:
       ```powershell
-      .\mvnw clean install
+      mvn clean install
       ```
     - The first run may take a few minutes as it downloads dependencies.
+    - *Note:* the `mvnw` / `mvnw.cmd` wrapper scripts are **not** present in this
+      repository (only `.mvn/wrapper/maven-wrapper.properties`), so use a locally
+      installed Maven 3.8+, or regenerate the wrapper with `mvn wrapper:wrapper`.
 
 3.  **Run the Application:**
-    - Locate the main application class (likely in `moment_forever_core` or a dedicated runner module).
+    - The main application class is `MomentForeverApp` in `moment_forever_core`.
     - Right-click and choose "Run".
     - Or run from the command line:
       ```powershell
-      .\mvnw spring-boot:run -pl moment_forever_core
+      mvn spring-boot:run -pl moment_forever_core
       ```
-      *(Note: Adjust the module name if the main app is in a different module)*
+    - The service starts on `http://localhost:8081/platform`.
+    - Backing services must be reachable first: PostgreSQL, MongoDB, Redis and
+      Kafka. See [README.md](README.md) for the environment variables that point
+      the service at them.
 
 ## Module Structure
 
-- `moment_forever_commons`: Shared utilities and DTOs.
-- `moment_forever_data`: Database entities and repositories.
-- `moment_forever_core`: Business logic and main application.
-- `moment_forever_security`: Security configurations.
-- `moment_forever_object_store`: Object storage services.
+- `moment_forever_commons`: Shared DTOs, Kafka event contracts and snapshots, error handling.
+- `moment_forever_data`: JPA entities and the DAO layer.
+- `moment_forever_core`: The runnable Spring Boot service - controllers, services, Kafka producer/consumers, Quartz jobs.
+- `moment_forever_security`: JWT service, gateway header authentication filter, Spring Security configuration.
+- `moment_forever_object_store`: Object storage abstraction (MongoDB GridFS, S3).
+
+For the service architecture and the booking event flow, see
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
+[docs/BOOKING_EVENT_FLOW.md](docs/BOOKING_EVENT_FLOW.md).
 
 ## Troubleshooting
 

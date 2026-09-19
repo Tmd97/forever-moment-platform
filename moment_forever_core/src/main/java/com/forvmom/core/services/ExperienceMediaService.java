@@ -17,7 +17,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 public class ExperienceMediaService {
@@ -30,6 +34,12 @@ public class ExperienceMediaService {
 
     @Autowired
     private ImageUrlConfig imageUrlConfig;
+
+    @Autowired
+    private ImageFlowCacheService imageFlowCacheService;
+
+    @Autowired
+    private ImageVariantService imageVariantService;
 
     // We resolve experience via ExperienceDao (reuse existing)
     @Autowired
@@ -61,8 +71,11 @@ public class ExperienceMediaService {
         mapper.setMedia(media);
         experience.addMediaMapper(mapper);
 
-        return ExperienceMediaBeanMapper.mapEntityToDto(
+        ExperienceMediaResponseDto response = ExperienceMediaBeanMapper.mapEntityToDto(
                 experienceMediaMapperDao.save(mapper), imageUrlConfig);
+        applyVariantUrls(Collections.singletonList(response));
+        imageFlowCacheService.evictExperienceDetail(experienceId);
+        return response;
     }
 
     /**
@@ -88,13 +101,18 @@ public class ExperienceMediaService {
                         mediaId, BulkAttachMediaResultDto.SkippedMediaDto.Reason.NOT_FOUND, e.getMessage()));
             }
         }
+        if (!attached.isEmpty()) {
+            imageFlowCacheService.evictExperienceDetail(experienceId);
+        }
         return new BulkAttachMediaResultDto(attached, skipped);
     }
 
     @Transactional(readOnly = true)
     public List<ExperienceMediaResponseDto> getMediaForExperience(Long experienceId) {
-        return ExperienceMediaBeanMapper.mapEntitiesToDto(
+        List<ExperienceMediaResponseDto> response = ExperienceMediaBeanMapper.mapEntitiesToDto(
                 experienceMediaMapperDao.findByExperienceId(experienceId), imageUrlConfig);
+        applyVariantUrls(response);
+        return response;
     }
 
     @Transactional(readOnly = true)
@@ -103,7 +121,9 @@ public class ExperienceMediaService {
         if (mapper == null)
             throw new ResourceNotFoundException(
                     "No primary image set for experience " + experienceId + ".");
-        return ExperienceMediaBeanMapper.mapEntityToDto(mapper, imageUrlConfig);
+        ExperienceMediaResponseDto response = ExperienceMediaBeanMapper.mapEntityToDto(mapper, imageUrlConfig);
+        applyVariantUrls(Collections.singletonList(response));
+        return response;
     }
 
     // ── Update ────────────────────────────────────────────────────────────────
@@ -122,8 +142,11 @@ public class ExperienceMediaService {
         }
 
         ExperienceMediaBeanMapper.updateEntityFromDto(mapper, requestDto);
-        return ExperienceMediaBeanMapper.mapEntityToDto(
+        ExperienceMediaResponseDto response = ExperienceMediaBeanMapper.mapEntityToDto(
                 experienceMediaMapperDao.update(mapper), imageUrlConfig);
+        applyVariantUrls(Collections.singletonList(response));
+        imageFlowCacheService.evictExperienceDetail(experienceId);
+        return response;
     }
 
     // ── Detach ────────────────────────────────────────────────────────────────
@@ -132,6 +155,7 @@ public class ExperienceMediaService {
     public void detachMedia(Long experienceId, Long mediaId) {
         ExperienceMediaMapper mapper = findMapperOrThrow(experienceId, mediaId);
         experienceMediaMapperDao.delete(mapper);
+        imageFlowCacheService.evictExperienceDetail(experienceId);
     }
 
     @Transactional
@@ -141,6 +165,7 @@ public class ExperienceMediaService {
             throw new ResourceNotFoundException("Media mapping not found: " + mapperId);
         mapper.setIsActive(!Boolean.TRUE.equals(mapper.getIsActive()));
         experienceMediaMapperDao.update(mapper);
+        imageFlowCacheService.evictExperienceDetail(mapper.getExperience().getId());
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -174,5 +199,37 @@ public class ExperienceMediaService {
         if (media == null)
             throw new ResourceNotFoundException("Media not found: " + mediaId);
         return media;
+    }
+
+    public void applyVariantUrls(List<ExperienceMediaResponseDto> mediaDtos) {
+        if (mediaDtos == null || mediaDtos.isEmpty()) {
+            return;
+        }
+
+        List<Long> mediaIds = mediaDtos.stream()
+                .map(ExperienceMediaResponseDto::getMediaId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
+
+        Map<Long, ImageVariantService.VariantUrls> urlsByMediaId = imageVariantService.getUrlsForMediaIds(mediaIds);
+        for (ExperienceMediaResponseDto dto : mediaDtos) {
+            if (dto.getMediaId() == null) {
+                continue;
+            }
+            ImageVariantService.VariantUrls urls = urlsByMediaId.get(dto.getMediaId());
+            if (urls == null) {
+                continue;
+            }
+            if (urls.getHeroUrl() != null) {
+                dto.setHeroUrl(urls.getHeroUrl());
+                dto.setUrl(urls.getHeroUrl());
+            }
+            if (urls.getThumbnailUrl() != null) {
+                dto.setThumbnailUrl(urls.getThumbnailUrl());
+            }
+            if (urls.getOriginalUrl() != null) {
+                dto.setOriginalUrl(urls.getOriginalUrl());
+            }
+        }
     }
 }

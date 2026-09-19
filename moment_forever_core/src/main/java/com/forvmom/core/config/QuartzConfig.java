@@ -5,14 +5,32 @@ import com.forvmom.core.scheduler.OutboxRetriesJob;
 import org.quartz.*;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-// we are using fire now policy, so even if many missed fires, we fire only once when server
-// heal back, as once fire only is actually trigger all missed enrich process. so good for me
+
+/**
+ * Schedules outbox retry every minute and retention cleanup every day.
+ *
+ * <p>The JDBC job store coordinates multiple application instances. After
+ * downtime, each trigger runs once immediately instead of replaying every missed run.
+ *
+ * @see com.forvmom.core.retries.service.BookingReliabilityMaintenanceService
+ */
 @Configuration
 public class QuartzConfig {
 
+    /** Retention sweep cadence: published outbox rows are pruned once a day. */
     private static final int CLEANUP_INTERVAL_HOURS = 24;
+
+    /**
+     * Retry sweep cadence. Kept short so a transient Kafka outage delays a booking
+     * by roughly a minute rather than by the compensation window.
+     */
     private static final int RETRY_INTERVAL_MINUTES = 1;
 
+    /**
+     * Durable job definition for the daily published-record cleanup.
+     *
+     * @return job detail for {@link OutboxCleanupJob}
+     */
     @Bean
     public JobDetail outboxCleanupJobDetail() {
         return JobBuilder.newJob(OutboxCleanupJob.class)
@@ -21,12 +39,18 @@ public class QuartzConfig {
                 .build();
     }
 
+    /**
+     * Trigger firing {@link OutboxCleanupJob} every {@value #CLEANUP_INTERVAL_HOURS}
+     * hours.
+     *
+     * @return the cleanup trigger
+     */
     @Bean
     public Trigger outboxCleanupTrigger() {
         SimpleScheduleBuilder scheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
                 .withIntervalInHours(CLEANUP_INTERVAL_HOURS)
                 .repeatForever()
-                .withMisfireHandlingInstructionFireNow(); // Important: on misfire, run immediately
+                .withMisfireHandlingInstructionFireNow();
 
         return TriggerBuilder.newTrigger()
                 .forJob(outboxCleanupJobDetail())
@@ -36,6 +60,11 @@ public class QuartzConfig {
                 .build();
     }
 
+    /**
+     * Durable job definition for the outbox retry/compensation poller.
+     *
+     * @return job detail for {@link OutboxRetriesJob}
+     */
     @Bean
     public JobDetail outboxRetryJobDetail() {
         return JobBuilder.newJob(OutboxRetriesJob.class)
@@ -44,6 +73,12 @@ public class QuartzConfig {
                 .build();
     }
 
+    /**
+     * Trigger firing {@link OutboxRetriesJob} every
+     * {@value #RETRY_INTERVAL_MINUTES} minute(s).
+     *
+     * @return the retry trigger
+     */
     @Bean
     public Trigger outboxRetryTrigger() {
         SimpleScheduleBuilder scheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
@@ -54,7 +89,7 @@ public class QuartzConfig {
         return TriggerBuilder.newTrigger()
                 .forJob(outboxRetryJobDetail())
                 .withIdentity("outboxRetryTrigger")
-                .withDescription("Retries failed/unprocessed outbox records older than 5 minutes")
+                .withDescription("Recovers timed-out and failed booking outbox records")
                 .withSchedule(scheduleBuilder)
                 .build();
     }

@@ -34,9 +34,6 @@ public class ExperienceTimeSlotMapper {
     @Column(name = "max_capacity")
     private Integer maxCapacity;
 
-    @Column(name = "current_bookings", nullable = false)
-    private Integer currentBookings = 0;
-
     @Column(name = "is_active", nullable = false)
     private Boolean isActive;
 
@@ -100,14 +97,6 @@ public class ExperienceTimeSlotMapper {
         this.maxCapacity = maxCapacity;
     }
 
-    public Integer getCurrentBookings() {
-        return currentBookings;
-    }
-
-    public void setCurrentBookings(Integer currentBookings) {
-        this.currentBookings = currentBookings;
-    }
-
     public Boolean getIsActive() {
         return isActive;
     }
@@ -156,21 +145,6 @@ public class ExperienceTimeSlotMapper {
         this.updatedOn = updatedOn;
     }
 
-    // Business logic methods
-    public boolean hasAvailableCapacity() {
-        if (maxCapacity == null) {
-            return true; // No capacity limit
-        }
-        return currentBookings < maxCapacity;
-    }
-
-    public Integer getAvailableCapacity() {
-        if (maxCapacity == null) {
-            return null; // Unlimited
-        }
-        return maxCapacity - currentBookings;
-    }
-
     public boolean isValidOnDate(LocalDate date) {
         if (validFrom != null && date.isBefore(validFrom)) {
             return false;
@@ -185,16 +159,4 @@ public class ExperienceTimeSlotMapper {
         return priceOverride != null ? priceOverride : basePrice;
     }
 
-    public void incrementBookings() {
-        if (this.currentBookings == null) {
-            this.currentBookings = 0;
-        }
-        this.currentBookings++;
-    }
-
-    public void decrementBookings() {
-        if (this.currentBookings != null && this.currentBookings > 0) {
-            this.currentBookings--;
-        }
-    }
 }

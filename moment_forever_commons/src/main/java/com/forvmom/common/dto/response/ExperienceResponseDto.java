@@ -8,7 +8,7 @@ import java.util.List;
  * Full response DTO returned by GET /experiences/{id} and GET
  * /experiences/slug/{slug}.
  * Includes embedded ExperienceDetail, inclusions, cancellation policies,
- * and locations with nested timeslots.
+ * locations with nested timeslots, and attached media gallery.
  * NOT used on list endpoints — use ExperienceHighlightResponseDto for lists.
  */
 public class ExperienceResponseDto {
@@ -34,6 +34,7 @@ public class ExperienceResponseDto {
     // M:M embedded lists — only populated on single-item fetch
     private List<ExperienceInclusionResponseDto> inclusions;
     private List<CancellationPolicyResponseDto> cancellationPolicies;
+    private List<ExperienceMediaResponseDto> media;
 
     /**
      * Locations attached to this experience, each carrying its nested timeslots.
@@ -162,6 +163,14 @@ public class ExperienceResponseDto {
 
     public void setCancellationPolicies(List<CancellationPolicyResponseDto> cancellationPolicies) {
         this.cancellationPolicies = cancellationPolicies;
+    }
+
+    public List<ExperienceMediaResponseDto> getMedia() {
+        return media;
+    }
+
+    public void setMedia(List<ExperienceMediaResponseDto> media) {
+        this.media = media;
     }
 
     public Date getCreatedOn() {

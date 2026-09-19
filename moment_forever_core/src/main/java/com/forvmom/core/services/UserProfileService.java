@@ -28,6 +28,19 @@ import javax.swing.text.html.Option;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Self-service profile operations for the currently authenticated user.
+ *
+ * <p>
+ * Every method resolves the caller from the Spring Security context rather than
+ * accepting a user id, so one user can never act on another's profile.
+ *
+ * <p>
+ * Identity is split across two entities: {@code AuthUser} holds credentials while
+ * {@link ApplicationUser} holds profile data. Anything touching the login
+ * identifier must therefore update both, which is why the email change path below
+ * writes to {@code AuthUser} as well.
+ */
 @Service
 public class UserProfileService {
 
@@ -48,6 +61,19 @@ public class UserProfileService {
     @Autowired
     private PasswordConfig passwordEncoder;
 
+    /**
+     * Updates the authenticated user's profile.
+     *
+     * <p>
+     * A changed email is also the login username, so it is propagated to the
+     * {@code AuthUser} record and rejected if already taken. Both writes share this
+     * transaction to avoid the profile and credentials disagreeing.
+     *
+     * @param userProfileRequestDto new profile values
+     * @return the updated profile
+     * @throws ResourceNotFoundException if the principal has no application user
+     * @throws CustomAuthException       if the requested email is already in use
+     */
     @Transactional
     public AppUserResponseDto updateCurrentUserProfile(@Valid UserProfileRequestDto userProfileRequestDto) {
         Object o = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -85,6 +111,14 @@ public class UserProfileService {
         throw new RuntimeException("User not authenticated");
     }
 
+    /**
+     * Returns the authenticated user's profile.
+     *
+     * @return the current user's profile
+     * @throws CustomAuthException       if there is no authenticated principal or
+     *                                   it is of an unexpected type
+     * @throws ResourceNotFoundException if the principal has no application user
+     */
     public AppUserResponseDto getCurrentUserProfile() {
         // Add null check
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -105,8 +139,18 @@ public class UserProfileService {
         return ApplicationUserBeanMapper.mapEntityToDto(applicationUser.get());
     }
 
-    // delete the user profile of the currently authenticated user, this will delete
-    // the authUser and cascade delete the applicationUser as well
+    /**
+     * Permanently deletes the authenticated user's account.
+     *
+     * <p>
+     * Deletion targets the {@code AuthUser}; the {@link ApplicationUser} is removed
+     * by cascade. The password is re-verified first because a valid session alone
+     * is not sufficient authorisation for an irreversible action.
+     *
+     * @param password the caller's current password, for re-authentication
+     * @throws CustomAuthException       if unauthenticated or the password is wrong
+     * @throws ResourceNotFoundException if the principal has no application user
+     */
     public void deleteCurrentUserProfile(String password) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -131,6 +175,19 @@ public class UserProfileService {
         authUserDao.delete(applicationUser.get().getAuthUser());
     }
 
+    /**
+     * Deactivates the authenticated user's account without deleting it.
+     *
+     * <p>
+     * Locking the account alone would not end the session, because existing refresh
+     * tokens could still mint new access tokens. All outstanding refresh tokens are
+     * therefore revoked in the same transaction.
+     *
+     * @param refreshToken the caller's current refresh token (currently unused;
+     *                     all of the user's tokens are revoked)
+     * @throws CustomAuthException       if the principal is of an unexpected type
+     * @throws ResourceNotFoundException if the principal has no application user
+     */
     @Transactional
     public void deactivateCurrentAccount(String refreshToken) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

@@ -19,7 +19,9 @@ public class ExperienceMediaResponseDto {
     // Public URLs (built via ImageUrlConfig from storageFileName — cache-busted by
     // design)
     private String url;
+    private String heroUrl;
     private String thumbnailUrl;
+    private String originalUrl;
 
     // Junction-row fields
     private Integer displayOrder;
@@ -85,12 +87,28 @@ public class ExperienceMediaResponseDto {
         this.url = url;
     }
 
+    public String getHeroUrl() {
+        return heroUrl;
+    }
+
+    public void setHeroUrl(String heroUrl) {
+        this.heroUrl = heroUrl;
+    }
+
     public String getThumbnailUrl() {
         return thumbnailUrl;
     }
 
     public void setThumbnailUrl(String thumbnailUrl) {
         this.thumbnailUrl = thumbnailUrl;
+    }
+
+    public String getOriginalUrl() {
+        return originalUrl;
+    }
+
+    public void setOriginalUrl(String originalUrl) {
+        this.originalUrl = originalUrl;
     }
 
     public Integer getDisplayOrder() {

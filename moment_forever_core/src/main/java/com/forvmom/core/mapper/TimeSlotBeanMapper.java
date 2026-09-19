@@ -62,7 +62,7 @@ public class TimeSlotBeanMapper {
 
     /**
      * Maps a junction row → response DTO.
-     * Embeds TimeSlot master data with per-location pricing and availability.
+     * Embeds TimeSlot master data with per-location configuration and pricing.
      */
     public static ExperienceTimeSlotResponseDto mapMapperEntityToDto(ExperienceTimeSlotMapper mapper) {
         if (mapper == null)
@@ -82,8 +82,6 @@ public class TimeSlotBeanMapper {
 
         dto.setPriceOverride(mapper.getPriceOverride());
         dto.setMaxCapacity(mapper.getMaxCapacity());
-        dto.setCurrentBookings(mapper.getCurrentBookings());
-        dto.setAvailableCapacity(mapper.getAvailableCapacity());
         dto.setValidFrom(mapper.getValidFrom());
         dto.setValidTo(mapper.getValidTo());
         dto.setIsActive(mapper.getIsActive());

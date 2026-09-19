@@ -3,6 +3,17 @@ package com.forvmom.core.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
+/**
+ * Binds the {@code app.image.*} properties and builds the URLs under which stored
+ * images are served.
+ *
+ * <p>
+ * Image bytes live in MongoDB GridFS and are addressed by storage file name, so
+ * clients never receive a raw store reference — only a URL produced here. Routing
+ * every URL through this one class means switching between serving images from
+ * the service and serving them from a CDN is a configuration change
+ * ({@code app.image.use-cdn}) rather than a code change.
+ */
 @Component
 @ConfigurationProperties(prefix = "app.image")
 public class ImageUrlConfig {
@@ -57,7 +68,13 @@ public class ImageUrlConfig {
         this.useCdn = useCdn;
     }
 
-    // Helper methods to build URLs
+    /**
+     * Builds the public URL for an image, preferring the CDN when one is enabled
+     * and configured.
+     *
+     * @param storageFileName GridFS storage file name of the image
+     * @return the public URL clients should use to fetch the image
+     */
     public String buildPublicUrl(String storageFileName) {
         if (useCdn && cdnBaseUrl != null) {
             return cdnBaseUrl + "/fetch/" + storageFileName;
@@ -65,10 +82,28 @@ public class ImageUrlConfig {
         return publicBaseUrl + "/fetch/" + storageFileName;
     }
 
+    /**
+     * Builds the admin URL for an image, addressed by media id rather than storage
+     * file name so admins can act on the metadata record.
+     *
+     * @param mediaId identifier of the media record
+     * @return the admin-facing image URL
+     */
     public String buildAdminUrl(Long mediaId) {
         return adminBaseUrl + "/" + mediaId;
     }
 
+    /**
+     * Builds the thumbnail URL for an image.
+     *
+     * <p>
+     * Currently identical to {@link #buildPublicUrl(String)} because no resizing
+     * pipeline exists yet; it is kept separate so callers already point at the
+     * right seam once one is added.
+     *
+     * @param storageFileName GridFS storage file name of the image
+     * @return the thumbnail URL
+     */
     public String buildThumbnailUrl(String storageFileName) {
         if (useCdn && cdnBaseUrl != null) {
             return cdnBaseUrl + "/fetch/" + storageFileName;

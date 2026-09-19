@@ -68,4 +68,14 @@ public class ExperienceMediaMapperDaoImpl extends GenericDaoImpl<ExperienceMedia
             return null;
         }
     }
+
+    @Override
+    public List<Long> findExperienceIdsByMediaId(Long mediaId) {
+        return em.createQuery(
+                "SELECT DISTINCT m.experience.id FROM ExperienceMediaMapper m " +
+                        "WHERE m.media.id = :mediaId AND m.deleted = false",
+                Long.class)
+                .setParameter("mediaId", mediaId)
+                .getResultList();
+    }
 }

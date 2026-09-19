@@ -60,32 +60,4 @@ public class ExperienceTimeSlotMapperDaoImpl extends GenericDaoImpl<ExperienceTi
                                 .executeUpdate();
         }
 
-        @Override
-        public int atomicIncrementCapacity(Long slotMapperId, int guestCount) {
-                // Uses m.maxCapacity directly from the table. IS NULL means unlimited.
-                return em.createQuery(
-                                "UPDATE ExperienceTimeSlotMapper m " +
-                                                "SET m.currentBookings = m.currentBookings + :guests " +
-                                                "WHERE m.id = :id " +
-                                                "  AND m.deleted = false " +
-                                                "  AND (m.maxCapacity IS NULL OR (m.currentBookings + :guests) <= m.maxCapacity)")
-                                .setParameter("guests", guestCount)
-                                .setParameter("id", slotMapperId)
-                                .executeUpdate();
-        }
-
-        @Override
-        public int atomicDecrementCapacity(Long slotMapperId, int guestCount) {
-                // GREATEST(0, current_bookings - guestCount) — prevents going negative
-                return em.createQuery(
-                                "UPDATE ExperienceTimeSlotMapper m " +
-                                                "SET m.currentBookings = CASE " +
-                                                "  WHEN m.currentBookings >= :guests THEN m.currentBookings - :guests "
-                                                +
-                                                "  ELSE 0 END " +
-                                                "WHERE m.id = :id AND m.deleted = false")
-                                .setParameter("guests", guestCount)
-                                .setParameter("id", slotMapperId)
-                                .executeUpdate();
-        }
 }

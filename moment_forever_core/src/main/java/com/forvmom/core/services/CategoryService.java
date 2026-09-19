@@ -18,6 +18,22 @@ import org.springframework.web.bind.annotation.RequestBody;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Service that owns the top-level catalog {@link Category} entities.
+ *
+ * <p>
+ * Category names must be unique. New categories are appended to the end of the
+ * display order: the service asks {@code ReorderingService} for the current
+ * maximum order value and stores {@code max + 1}, which keeps the dense 1-based
+ * ordering maintained by {@code ReorderingService} intact. Repositioning is
+ * delegated back to that service through {@link #reorderCategories(Long, Long)}.
+ *
+ * <p>
+ * The class is annotated {@code @Transactional} at type level, so all public
+ * methods participate in a transaction; read methods are marked
+ * {@code readOnly = true} and use fetch-joined queries that load sub-categories
+ * along with the category.
+ */
 @Service
 @Transactional
 public class CategoryService extends ReorderingService {
@@ -30,6 +46,13 @@ public class CategoryService extends ReorderingService {
 
     // TODO remove from request the display Order, as backend have done set and
     // return
+    /**
+     * Creates a category and appends it to the end of the display order.
+     *
+     * @param categoryRequestDto the category to create; its name must be unique
+     * @return the persisted category as a response DTO
+     * @throws IllegalArgumentException if a category with the same name exists
+     */
     public CategoryResponseDto createCategory(CategoryRequestDto categoryRequestDto) {
         if (categoryDao.existsByName(categoryRequestDto.getName())) {
             throw new IllegalArgumentException(
@@ -43,6 +66,16 @@ public class CategoryService extends ReorderingService {
         return CategoryBeanMapper.mapEntityToDto(res);
     }
 
+    /**
+     * Applies the updatable fields of the request to an existing category. The
+     * display order is not recalculated here; use
+     * {@link #reorderCategories(Long, Long)} for that.
+     *
+     * @param id                 the identifier of the category to update
+     * @param categoryRequestDto the new field values
+     * @return the updated category as a response DTO
+     * @throws ResourceNotFoundException if no category exists with the given id
+     */
     @Transactional
     public CategoryResponseDto updateCategory(Long id, CategoryRequestDto categoryRequestDto) {
 
@@ -57,6 +90,13 @@ public class CategoryService extends ReorderingService {
 
     }
 
+    /**
+     * Loads a category together with its sub-categories in a single query.
+     *
+     * @param id the category identifier
+     * @return the category as a response DTO
+     * @throws ResourceNotFoundException if no category exists with the given id
+     */
     @Transactional(readOnly = true)
     public CategoryResponseDto getById(Long id) {
         // Use optimized query to fetch Category + SubCategories
@@ -67,6 +107,11 @@ public class CategoryService extends ReorderingService {
         return CategoryBeanMapper.mapEntityToDto(category);
     }
 
+    /**
+     * Lists every category with its sub-categories fetch-joined.
+     *
+     * @return all categories, or an empty list when none exist
+     */
     @Transactional(readOnly = true)
     public List<CategoryResponseDto> getAll() {
         // Use optimized query to fetch Categories + SubCategories
@@ -80,6 +125,13 @@ public class CategoryService extends ReorderingService {
         }
     }
 
+    /**
+     * Deletes a category through the DAO's delete semantics.
+     *
+     * @param id the identifier of the category to delete
+     * @return {@code true} once the delete has been issued
+     * @throws ResourceNotFoundException if no category exists with the given id
+     */
     @Transactional
     public boolean deleteCategory(Long id) {
         Category existing = categoryDao.findById(id);
@@ -90,6 +142,13 @@ public class CategoryService extends ReorderingService {
         return true;
     }
 
+    /**
+     * Moves a category to a new position, delegating to {@code ReorderingService}
+     * which shifts the surrounding rows so the 1-based ordering stays dense.
+     *
+     * @param id          the identifier of the category to move
+     * @param newPosition the target 1-based display position
+     */
     public void reorderCategories(Long id, Long newPosition) {
         reorderingService.reorderItems(id, newPosition, Category.class);
 

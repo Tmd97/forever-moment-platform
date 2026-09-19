@@ -1,18 +1,19 @@
 package com.forvmom.common.dto.events;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 
 /**
  * Published to topic {@code booking-failed} by the Booking Service when a
  * booking cannot be fulfilled (payment failure or validation failure).
  *
  * <p>
- * Consumed by Core Service to roll back the {@code current_bookings} counter
- * that was incremented atomically during the booking request transaction.
+ * Consumed by Core Service to release the date-scoped inventory reserved during
+ * the booking request transaction.
  *
  * <p>
- * IMPORTANT: {@code timeSlotMapperId} and {@code guestCount} are required
- * so Core can perform the rollback without any additional DB lookup.
+ * IMPORTANT: {@code timeSlotMapperId}, {@code bookingDate}, and
+ * {@code guestCount} identify the inventory row and quantity to release.
  */
 public class BookingFailedEvent extends BaseEvent {
 
@@ -20,10 +21,11 @@ public class BookingFailedEvent extends BaseEvent {
     private Long userId;
     private String userEmail;
     private Long experienceId;
-    /** Required for Core to identify which slot row to decrement */
+    /** Required for Core to identify the configured slot mapper. */
     private Long timeSlotMapperId;
-    /** Required for Core to know how much to decrement */
+    /** Required for Core to know how much capacity to release. */
     private Integer guestCount;
+    private LocalDate bookingDate;
     private String failureReason;
     private LocalDateTime failedAt;
 
@@ -77,6 +79,14 @@ public class BookingFailedEvent extends BaseEvent {
 
     public void setGuestCount(Integer guestCount) {
         this.guestCount = guestCount;
+    }
+
+    public LocalDate getBookingDate() {
+        return bookingDate;
+    }
+
+    public void setBookingDate(LocalDate bookingDate) {
+        this.bookingDate = bookingDate;
     }
 
     public String getFailureReason() {

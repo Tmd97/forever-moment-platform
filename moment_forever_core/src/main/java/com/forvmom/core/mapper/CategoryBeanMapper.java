@@ -10,8 +10,24 @@ import com.forvmom.data.entities.SubCategory;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Static conversions between {@link Category} entities and their request and
+ * response DTOs.
+ *
+ * <p>
+ * The read direction also maps the nested sub-categories, delegating to
+ * {@link SubCategoryBeanMapper}; the write direction covers the category's own
+ * fields only.
+ */
 public class CategoryBeanMapper {
 
+    /**
+     * Copies the writable category fields from a request DTO onto an existing
+     * entity. Nested sub-categories are not touched.
+     *
+     * @param dto    source of the new values
+     * @param entity entity to mutate in place
+     */
     public static void mapDtoToEntity(CategoryRequestDto dto, Category entity) {
         entity.setName(dto.getName());
         entity.setDescription(dto.getDescription());
@@ -35,6 +51,13 @@ public class CategoryBeanMapper {
     // }
     // }
 
+    /**
+     * Maps a category entity to its response DTO, including its sub-categories when
+     * the collection is loaded and non-empty.
+     *
+     * @param entity the category entity to convert
+     * @return the populated {@link CategoryResponseDto}
+     */
     public static CategoryResponseDto mapEntityToDto(Category entity) {
         CategoryResponseDto dto = new CategoryResponseDto();
         dto.setId(entity.getId());

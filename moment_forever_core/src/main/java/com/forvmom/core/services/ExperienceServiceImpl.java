@@ -6,10 +6,13 @@ import com.forvmom.common.dto.response.ExperienceDetailResponseDto;
 import com.forvmom.common.dto.response.ExperienceHighlightResponseDto;
 import com.forvmom.common.dto.response.ExperienceResponseDto;
 import com.forvmom.common.errorhandler.ResourceNotFoundException;
+import com.forvmom.core.config.ImageUrlConfig;
 import com.forvmom.core.mapper.ExperienceBeanMapper;
+import com.forvmom.core.mapper.ExperienceMediaBeanMapper;
 import com.forvmom.core.mapper.InclusionPolicyBeanMapper;
 import com.forvmom.data.dao.ExperienceDao;
 import com.forvmom.data.dao.ExperienceDetailDao;
+import com.forvmom.data.dao.ExperienceMediaMapperDao;
 import com.forvmom.data.dao.SubCategoryDao;
 import com.forvmom.data.entities.Experience;
 import com.forvmom.data.entities.ExperienceDetail;
@@ -22,6 +25,30 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * JPA-backed implementation of {@link ExperienceService}, the service that owns
+ * the {@link Experience} aggregate and its one-to-one
+ * {@link ExperienceDetail} row.
+ *
+ * <p>
+ * An experience is identified publicly by a unique slug and always belongs to a
+ * {@link SubCategory}. Creation persists both the experience row and its detail
+ * row; updates upsert the detail row.
+ *
+ * <p>
+ * Reads deliberately issue several queries instead of one wide join: the first
+ * fetch-joins detail, sub-category and inclusion mappers, and follow-up queries
+ * load policy mappers, location/time-slot mappers and media mappers into the
+ * same Hibernate session. Splitting them avoids the Cartesian product that a
+ * single multi-collection join would produce.
+ *
+ * <p>
+ * Write paths keep the Redis catalog snapshot in step by calling
+ * {@code CatalogCacheService} inline: {@code updateExperience},
+ * {@code toggleActive} and {@code toggleFeatured} warm the snapshot, while
+ * {@code deleteExperience} evicts it, so the asynchronous booking enrichment
+ * path never reads stale catalog data.
+ */
 @Service
 public class ExperienceServiceImpl implements ExperienceService {
 
@@ -37,6 +64,32 @@ public class ExperienceServiceImpl implements ExperienceService {
     @Autowired
     private CatalogCacheService catalogCacheService;
 
+    @Autowired
+    private ExperienceMediaMapperDao experienceMediaMapperDao;
+
+    @Autowired
+    private ImageUrlConfig imageUrlConfig;
+
+    @Autowired
+    private ImageFlowCacheService imageFlowCacheService;
+
+    @Autowired
+    private ExperienceMediaService experienceMediaService;
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Persists the experience row and its detail row in the same transaction. Note
+     * that no cache warming happens here, since a brand new experience has no
+     * location or slot mappings to snapshot yet.
+     *
+     * @param requestDto the experience attributes, including detail fields and the
+     *                   owning sub-category id
+     * @return the created experience
+     * @throws IllegalArgumentException  if the slug is already in use
+     * @throws ResourceNotFoundException if the sub-category does not exist
+     */
     @Override
     @Transactional
     public ExperienceResponseDto createExperience(ExperienceCreateRequestDto requestDto) {
@@ -65,6 +118,22 @@ public class ExperienceServiceImpl implements ExperienceService {
         return ExperienceBeanMapper.mapEntityToDto(saved, true);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * The slug uniqueness check runs only when the slug changes, and the
+     * sub-category is re-resolved only when a different id is supplied. The detail
+     * row is upserted: inserted when missing, updated otherwise. Finally the Redis
+     * catalog snapshot is warmed inline so booking enrichment sees the new values.
+     *
+     * @param id         the experience identifier
+     * @param requestDto the new experience and detail attributes
+     * @return the updated experience
+     * @throws ResourceNotFoundException if the experience or the new sub-category
+     *                                   does not exist
+     * @throws IllegalArgumentException  if the new slug is already in use
+     */
     @Override
     @Transactional
     public ExperienceResponseDto updateExperience(Long id, ExperienceCreateRequestDto requestDto) {
@@ -103,6 +172,7 @@ public class ExperienceServiceImpl implements ExperienceService {
         updated.setDetail(savedDetail);
 
         catalogCacheService.warmExperienceCache(updated);
+        imageFlowCacheService.evictExperienceDetail(id);
 
         return ExperienceBeanMapper.mapEntityToDto(updated, true);
     }
@@ -116,9 +186,26 @@ public class ExperienceServiceImpl implements ExperienceService {
      * This avoids the multiplied result set problem that would occur if you joined
      * both collections in one query.
      */
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Loads the full experience view with four queries (detail plus inclusions,
+     * then policies, then locations/time slots, then media gallery), letting
+     * Hibernate merge the extra collections into the already-managed entity.
+     *
+     * @param id the experience identifier
+     * @return the experience with inclusions, cancellation policies and locations
+     * @throws ResourceNotFoundException if no experience exists with the given id
+     */
     @Override
     @Transactional(readOnly = true)
     public ExperienceResponseDto getById(Long id) {
+        ExperienceResponseDto cached = imageFlowCacheService.getExperienceDetail(id);
+        if (cached != null) {
+            return cached;
+        }
+
         // Query 1: experience + detail + subCategory + inclusionMappers (JOIN FETCH)
         Experience experience = experienceDao.findByIdWithDetail(id);
         if (experience == null) {
@@ -136,32 +223,43 @@ public class ExperienceServiceImpl implements ExperienceService {
                 new ArrayList<>(experience.getPolicyMappers())));
         dto.setLocations(ExperienceBeanMapper.mapLocationMappers(
                 new ArrayList<>(experience.getLocationMappers())));
+        dto.setMedia(ExperienceMediaBeanMapper.mapEntitiesToDto(
+                experienceMediaMapperDao.findByExperienceId(id), imageUrlConfig));
+        experienceMediaService.applyVariantUrls(dto.getMedia());
+        imageFlowCacheService.putExperienceDetail(id, dto);
         return dto;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Slug-based counterpart of {@link #getById(Long)}, using the same multi-query
+     * loading strategy.
+     *
+     * @param slug the public experience slug
+     * @return the experience with inclusions, cancellation policies and locations
+     * @throws ResourceNotFoundException if no experience has that slug
+     */
     @Override
     @Transactional(readOnly = true)
     public ExperienceResponseDto getBySlug(String slug) {
-        // Query 1: experience + detail + subCategory + inclusionMappers (JOIN FETCH)
-        Experience experience = experienceDao.findBySlugWithDetail(slug);
+        Experience experience = experienceDao.findBySlug(slug);
         if (experience == null) {
             throw new ResourceNotFoundException("Experience not found with slug '" + slug + "'");
         }
-        // Query 2: policyMappers
-        experienceDao.findBySlugWithPolicies(slug);
-        // Query 3: locationMappers + location + timeslotMappers + timeSlot
-        experienceDao.findBySlugWithLocations(slug);
-
-        ExperienceResponseDto dto = ExperienceBeanMapper.mapEntityToDto(experience, true);
-        dto.setInclusions(InclusionPolicyBeanMapper.mapInclusionMappers(
-                new ArrayList<>(experience.getInclusionMappers())));
-        dto.setCancellationPolicies(InclusionPolicyBeanMapper.mapPolicyMappers(
-                new ArrayList<>(experience.getPolicyMappers())));
-        dto.setLocations(ExperienceBeanMapper.mapLocationMappers(
-                new ArrayList<>(experience.getLocationMappers())));
-        return dto;
+        return getById(experience.getId());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Returns the lightweight highlight projection rather than the full detail
+     * view.
+     *
+     * @return all experiences as highlights, or an empty list when none exist
+     */
     @Override
     @Transactional(readOnly = true)
     public List<ExperienceHighlightResponseDto> getAll() {
@@ -173,6 +271,11 @@ public class ExperienceServiceImpl implements ExperienceService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @return the active experiences as highlights, or an empty list
+     */
     @Override
     @Transactional(readOnly = true)
     public List<ExperienceHighlightResponseDto> getAllActive() {
@@ -184,6 +287,16 @@ public class ExperienceServiceImpl implements ExperienceService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Unlike the other list methods, an empty result is reported as an error.
+     *
+     * @param subCategoryId the sub-category identifier
+     * @return the experiences of that sub-category as highlights
+     * @throws ResourceNotFoundException if the sub-category has no experiences
+     */
     @Override
     @Transactional(readOnly = true)
     public List<ExperienceHighlightResponseDto> getBySubCategory(Long subCategoryId) {
@@ -196,6 +309,11 @@ public class ExperienceServiceImpl implements ExperienceService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @return the featured experiences as highlights, or an empty list
+     */
     @Override
     @Transactional(readOnly = true)
     public List<ExperienceHighlightResponseDto> getFeatured() {
@@ -207,6 +325,18 @@ public class ExperienceServiceImpl implements ExperienceService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Soft-deletes the experience (the entity carries {@code @SQLDelete}) and then
+     * evicts its Redis catalog snapshot so the removed experience cannot be served
+     * from cache.
+     *
+     * @param id the experience identifier
+     * @return {@code true} once the delete has been issued
+     * @throws ResourceNotFoundException if no experience exists with the given id
+     */
     @Override
     @Transactional
     public boolean deleteExperience(Long id) {
@@ -222,10 +352,20 @@ public class ExperienceServiceImpl implements ExperienceService {
 
         // Evict from cache
         catalogCacheService.evictExperience(id);
+        imageFlowCacheService.evictExperienceDetail(id);
 
         return true;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Flips the active flag and re-warms the catalog snapshot with the new state.
+     *
+     * @param id the experience identifier
+     * @throws ResourceNotFoundException if no experience exists with the given id
+     */
     @Override
     @Transactional
     public void toggleActive(Long id) {
@@ -236,8 +376,19 @@ public class ExperienceServiceImpl implements ExperienceService {
         existing.setActive(!existing.isActive());
         Experience updated = experienceDao.update(existing);
         catalogCacheService.warmExperienceCache(updated);
+        imageFlowCacheService.evictExperienceDetail(id);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Flips the featured flag and re-warms the catalog snapshot with the new
+     * state.
+     *
+     * @param id the experience identifier
+     * @throws ResourceNotFoundException if no experience exists with the given id
+     */
     @Override
     @Transactional
     public void toggleFeatured(Long id) {
@@ -248,8 +399,21 @@ public class ExperienceServiceImpl implements ExperienceService {
         existing.setIsFeatured(!existing.getIsFeatured());
         Experience updated = experienceDao.update(existing);
         catalogCacheService.warmExperienceCache(updated);
+        imageFlowCacheService.evictExperienceDetail(id);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Inserts the detail row when the experience has none yet, otherwise updates
+     * the existing one.
+     *
+     * @param experienceId the experience identifier
+     * @param requestDto   the detail fields to store
+     * @return the stored detail
+     * @throws ResourceNotFoundException if no experience exists with the given id
+     */
     @Override
     @Transactional
     public ExperienceDetailResponseDto upsertDetail(Long experienceId, ExperienceDetailRequestDto requestDto) {
@@ -268,10 +432,18 @@ public class ExperienceServiceImpl implements ExperienceService {
         ExperienceDetail saved = (detail.getId() == null)
                 ? experienceDetailDao.save(detail)
                 : experienceDetailDao.update(detail);
+        imageFlowCacheService.evictExperienceDetail(experienceId);
 
         return ExperienceBeanMapper.mapDetailToDto(saved);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param experienceId the experience identifier
+     * @return the detail row of that experience
+     * @throws ResourceNotFoundException if the experience has no detail row
+     */
     @Override
     @Transactional(readOnly = true)
     public ExperienceDetailResponseDto getDetail(Long experienceId) {

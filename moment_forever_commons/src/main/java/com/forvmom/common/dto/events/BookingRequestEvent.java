@@ -24,7 +24,7 @@ import java.util.List;
  * future)</li>
  * </ol>
  */
-public class BookingRequestEvent {
+public class BookingRequestEvent extends BaseEvent {
 
     // ── Booking identity ─────────────────────────────────────────────────────
 
@@ -82,11 +82,6 @@ public class BookingRequestEvent {
     /** {@code resolvedPricePerPerson × guestCount} */
     private BigDecimal totalAmount;
 
-    // ── Capacity snapshot ─────────────────────────────────────────────────────
-
-    /** Available capacity at the moment the event was created. */
-    private Integer availableCapacity;
-
     // ── Add-ons ───────────────────────────────────────────────────────────────
 
     /** Resolved add-on items with name and effective price. */
@@ -105,6 +100,7 @@ public class BookingRequestEvent {
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public BookingRequestEvent() {
+        super();
     }
 
     // ── Getters & Setters ─────────────────────────────────────────────────────
@@ -267,14 +263,6 @@ public class BookingRequestEvent {
 
     public void setTotalAmount(BigDecimal totalAmount) {
         this.totalAmount = totalAmount;
-    }
-
-    public Integer getAvailableCapacity() {
-        return availableCapacity;
-    }
-
-    public void setAvailableCapacity(Integer availableCapacity) {
-        this.availableCapacity = availableCapacity;
     }
 
     public List<BookedAddonSnapshot> getAddons() {

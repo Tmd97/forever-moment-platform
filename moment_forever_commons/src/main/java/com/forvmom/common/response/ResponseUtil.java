@@ -48,7 +48,12 @@ public class ResponseUtil {
     }
 
     public static <T> ApiResponse<T> buildConflictResponse(String message) {
-        return buildErrorResponse(message, HttpStatus.CONFLICT);
+        return ApiResponse.<T>builder()
+                .setCode(HttpStatus.CONFLICT.value())
+                .setStatus("CONFLICT")
+                .setMsg(message)
+                .setResponse(null)
+                .build();
     }
 
     public static <T> ApiResponse<T> buildNotFoundResponse(String message) {

@@ -56,6 +56,8 @@ public class ImageResponse {
 
     private String mediumUrl;
 
+    private String originalUrl;
+
     public Long getId() {
         return id;
     }
@@ -238,5 +240,13 @@ public class ImageResponse {
 
     public void setThumbnailUrl(String thumbnailUrl) {
         this.thumbnailUrl = thumbnailUrl;
+    }
+
+    public String getOriginalUrl() {
+        return originalUrl;
+    }
+
+    public void setOriginalUrl(String originalUrl) {
+        this.originalUrl = originalUrl;
     }
 }

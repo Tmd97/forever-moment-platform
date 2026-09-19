@@ -17,11 +17,16 @@ import java.util.concurrent.Executor;
 @EnableScheduling
 public class BookingThreadPoolConfig {
 
+    /**
+     * Creates the bounded executor used by fast-path and scheduled outbox
+     * enrichment. Its maximum concurrency stays below the database connection
+     * pool size because each publication holds a row lock while awaiting Kafka.
+     */
     @Bean(name = "bookingTaskExecutor")
     public Executor bookingTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(5);
-        executor.setMaxPoolSize(20);
+        executor.setMaxPoolSize(10);
         executor.setQueueCapacity(100);
         executor.setThreadNamePrefix("booking-enrich-");
         executor.setKeepAliveSeconds(60);

@@ -17,4 +17,7 @@ public interface ExperienceMediaMapperDao extends GenericDao<ExperienceMediaMapp
 
     /** Find the current primary/cover image mapper for an experience */
     ExperienceMediaMapper findPrimaryByExperienceId(Long experienceId);
+
+    /** Find all experiences that currently reference a media record */
+    List<Long> findExperienceIdsByMediaId(Long mediaId);
 }
