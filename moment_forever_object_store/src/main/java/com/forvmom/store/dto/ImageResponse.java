@@ -1,6 +1,5 @@
 package com.forvmom.store.dto;
 
-
 import com.fasterxml.jackson.annotation.JsonFormat;
 
 import java.util.Date;
@@ -18,8 +17,8 @@ public class ImageResponse {
     private String mediaType;
 
     private String mimeType;
-    private String mediaUrl;
-    private String thumbnailUrl;
+    private String mediaUrl; // hero url (optimized image for view good enough for most use cases)
+    private String thumbnailUrl; // url of thumbnail image
 
     private Long fileSizeBytes;
 
@@ -53,8 +52,6 @@ public class ImageResponse {
     private Date updatedOn;
 
     private String url;
-
-    private String mediumUrl;
 
     private String originalUrl;
 
