@@ -48,172 +48,173 @@ import java.util.zip.ZipOutputStream;
 @Tag(name = "Admin Image API", description = "Upload and manage images (Admin only)")
 public class ImageControllerAdmin {
 
-    @Autowired
-    private ImageService imageService;
+        @Autowired
+        private ImageService imageService;
 
-    @Autowired
-    private MediaService mediaService;
+        @Autowired
+        private MediaService mediaService;
 
-    // ── Upload (single) ───────────────────────────────────────────────────────
+        // ── Upload (single) ───────────────────────────────────────────────────────
 
-    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Upload Image", description = "Uploads to GridFS and creates a Media SQL record. "
-            + "storageFileName = originalName_<timestamp> for cache-busting.")
-    public ResponseEntity<ApiResponse<ImageResponse>> uploadImage(
-            @RequestParam("file") @Parameter(description = "Image file", content = @Content(mediaType = MediaType.APPLICATION_OCTET_STREAM_VALUE)) MultipartFile file,
-            @RequestParam Map<String, Object> metadata) {
+        @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        @Operation(summary = "Upload Image", description = "Uploads to GridFS and creates a Media SQL record. "
+                        + "storageFileName = originalName_<timestamp> for cache-busting.")
+        public ResponseEntity<ApiResponse<ImageResponse>> uploadImage(
+                        @RequestParam("file") @Parameter(description = "Image file", content = @Content(mediaType = MediaType.APPLICATION_OCTET_STREAM_VALUE)) MultipartFile file,
+                        @RequestParam Map<String, Object> metadata) {
 
-        ImageResponse response = imageService.uploadImage(file, metadata);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ResponseUtil.buildCreatedResponse(response, "Image uploaded successfully"));
-    }
-
-    // ── Upload (batch) ────────────────────────────────────────────────────────
-
-    @PostMapping(value = "/batch", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @Operation(summary = "Batch Upload Images", description = "Uploads multiple files in one request. Each file is stored in GridFS "
-            + "and gets its own Media SQL record. Returns the list of created records.")
-    public ResponseEntity<ApiResponse<List<ImageResponse>>> batchUploadImages(
-            @RequestPart("files") List<MultipartFile> files,
-
-            @RequestParam Map<String, Object> metadata) {
-
-        List<ImageResponse> results = new ArrayList<>();
-        for (MultipartFile file : files) {
-            results.add(imageService.uploadImage(file, metadata));
+                ImageResponse response = imageService.uploadImage(file, metadata);
+                return ResponseEntity.status(HttpStatus.CREATED)
+                                .body(ResponseUtil.buildCreatedResponse(response, "Image uploaded successfully"));
         }
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ResponseUtil.buildCreatedResponse(results,
-                        files.size() + " image(s) uploaded successfully"));
-    }
 
-    // ── Read ──────────────────────────────────────────────────────────────────
+        // ── Upload (batch) ────────────────────────────────────────────────────────
 
-    @GetMapping
-    @Operation(summary = "List All Images", description = "Returns all active media records with public URLs")
-    public ResponseEntity<ApiResponse<List<ImageResponse>>> getAllImages() {
-        List<ImageResponse> response = mediaService.getAllMedia();
-        return ResponseEntity.ok(ResponseUtil.buildOkResponse(response, AppConstants.MSG_FETCHED));
-    }
+        @PostMapping(value = "/batch", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        @Operation(summary = "Batch Upload Images", description = "Uploads multiple files in one request. Each file is stored in GridFS "
+                        + "and gets its own Media SQL record. Returns the list of created records.")
+        public ResponseEntity<ApiResponse<List<ImageResponse>>> batchUploadImages(
+                        @RequestPart("files") List<MultipartFile> files,
 
-    @GetMapping("/{id}")
-    @Operation(summary = "Get Image by SQL ID")
-    public ResponseEntity<ApiResponse<ImageResponse>> getImageById(@PathVariable Long id) {
-        ImageResponse response = mediaService.getMediaById(id);
-        return ResponseEntity.ok(ResponseUtil.buildOkResponse(response, AppConstants.MSG_FETCHED));
-    }
+                        @RequestParam Map<String, Object> metadata) {
 
-    // ── Download (single) ─────────────────────────────────────────────────────
-
-    @GetMapping("/{id}/download")
-    @Operation(summary = "Download Image by SQL ID", description = "Looks up the GridFS filePath from the Media SQL record and streams the file")
-    public ResponseEntity<Resource> downloadImage(@PathVariable Long id) throws IOException {
-        ImageResponse media = mediaService.getMediaById(id);
-        String gridFsId = media.getFilePath();
-
-        Resource resource = imageService.downloadImage(gridFsId);
-        String contentType = imageService.getContentType(gridFsId)
-                .orElse(MediaType.APPLICATION_OCTET_STREAM_VALUE);
-
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "inline; filename=\"" + resource.getFilename() + "\"")
-                .contentType(MediaType.parseMediaType(contentType))
-                .contentLength(resource.contentLength())
-                .body(resource);
-    }
-
-    @GetMapping("/fetch/{storageFileName}")
-    @Operation(summary = "Fetch Image by storageFileName", description = "Looks up the GridFS filePath from the Media SQL record and streams the file based on cache busted storageFileName")
-    public ResponseEntity<Resource> downloadImageWithCacheBust(
-            @PathVariable String storageFileName,
-            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) throws IOException {
-        String eTag = "\"" + storageFileName + "\"";
-        CacheControl cacheControl = CacheControl.maxAge(365, TimeUnit.DAYS)
-                .cachePublic()
-                .immutable();
-        if (eTag.equals(ifNoneMatch)) {
-            return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
-                    .eTag(eTag)
-                    .cacheControl(cacheControl)
-                    .build();
-        }
-        String gridFsId = mediaService.getMediaByStorageFileName(storageFileName);
-        Resource resource = imageService.downloadImage(gridFsId);
-        String contentType = imageService.getContentType(gridFsId)
-                .orElse(MediaType.APPLICATION_OCTET_STREAM_VALUE);
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "inline; filename=\"" + resource.getFilename() + "\"")
-                .cacheControl(cacheControl)
-                .eTag(eTag)
-                .contentType(MediaType.parseMediaType(contentType))
-                .contentLength(resource.contentLength())
-                .body(resource);
-    }
-    // ── Download (batch) ──────────────────────────────────────────────────────
-
-    @PostMapping("/batch/download")
-    @Operation(summary = "Batch Download Images as ZIP", description = "Accepts a list of Media SQL IDs and returns a ZIP archive "
-            + "containing all the requested images. Each file is named by its storageFileName. "
-            + "Unavailable files are skipped with an error_id_<id>.txt marker in the ZIP.")
-    public ResponseEntity<byte[]> batchDownloadImages(@RequestBody List<Long> ids) throws IOException {
-
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        try (ZipOutputStream zip = new ZipOutputStream(baos)) {
-            for (Long id : ids) {
-                try {
-                    ImageResponse media = mediaService.getMediaById(id);
-                    Resource resource = imageService.downloadImage(media.getFilePath());
-
-                    zip.putNextEntry(new ZipEntry(media.getStorageFileName()));
-                    try (InputStream in = resource.getInputStream()) {
-                        in.transferTo(zip);
-                    }
-                    zip.closeEntry();
-                } catch (Exception e) {
-                    // Skip unavailable files — add an error marker entry so caller knows
-                    zip.putNextEntry(new ZipEntry("error_id_" + id + ".txt"));
-                    zip.write(("Could not download id=" + id + ": " + e.getMessage()).getBytes());
-                    zip.closeEntry();
+                List<ImageResponse> results = new ArrayList<>();
+                for (MultipartFile file : files) {
+                        results.add(imageService.uploadImage(file, metadata));
                 }
-            }
+                return ResponseEntity.status(HttpStatus.CREATED)
+                                .body(ResponseUtil.buildCreatedResponse(results,
+                                                files.size() + " image(s) uploaded successfully"));
         }
 
-        byte[] zipBytes = baos.toByteArray();
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"images_batch.zip\"")
-                .contentType(MediaType.parseMediaType("application/zip"))
-                .contentLength(zipBytes.length)
-                .body(zipBytes);
-    }
+        // ── Read ──────────────────────────────────────────────────────────────────
 
-    // ── Update ────────────────────────────────────────────────────────────────
+        @GetMapping
+        @Operation(summary = "List All Images", description = "Returns all active media records with public URLs")
+        public ResponseEntity<ApiResponse<List<ImageResponse>>> getAllImages() {
+                List<ImageResponse> response = mediaService.getAllMedia();
+                return ResponseEntity.ok(ResponseUtil.buildOkResponse(response, AppConstants.MSG_FETCHED));
+        }
 
-    @PutMapping("/{id}")
-    @Operation(summary = "Update Image Metadata", description = "Updates mutable fields: altText, mediaType, isActive. "
-            + "The storageFileName and public URL are not affected.")
-    public ResponseEntity<ApiResponse<ImageResponse>> updateImage(
-            @PathVariable Long id,
-            @Valid @RequestBody MediaRequestDto requestDto) {
-        ImageResponse response = mediaService.updateMedia(id, requestDto);
-        return ResponseEntity.ok(ResponseUtil.buildOkResponse(response, AppConstants.MSG_UPDATED));
-    }
+        @GetMapping("/{id}")
+        @Operation(summary = "Get Image by SQL ID(old)")
+        public ResponseEntity<ApiResponse<ImageResponse>> getImageById(@PathVariable Long id) {
+                ImageResponse response = mediaService.getMediaById(id);
+                return ResponseEntity.ok(ResponseUtil.buildOkResponse(response, AppConstants.MSG_FETCHED));
+        }
 
-    // ── Delete ────────────────────────────────────────────────────────────────
+        // ── Download (single) ─────────────────────────────────────────────────────
 
-    @DeleteMapping("/{id}")
-    @Operation(summary = "Delete Image", description = "Permanently removes from GridFS and soft-deletes the SQL Media record")
-    public ResponseEntity<ApiResponse<Void>> deleteImage(@PathVariable Long id) {
-        mediaService.deleteMediaWithStorage(id);
-        return ResponseEntity.ok(ResponseUtil.buildOkResponse(null, AppConstants.MSG_DELETED));
-    }
+        @GetMapping("/{id}/download")
+        @Operation(summary = "Download Image by SQL ID(old)", description = "Looks up the GridFS filePath from the Media SQL record and streams the file")
+        public ResponseEntity<Resource> downloadImage(@PathVariable Long id) throws IOException {
+                ImageResponse media = mediaService.getMediaById(id);
+                String gridFsId = media.getFilePath();
 
-    @DeleteMapping("/batch")
-    @Operation(summary = "Batch Delete Images", description = "Deletes multiple images from GridFS and soft-deletes their SQL records")
-    public ResponseEntity<ApiResponse<Void>> deleteImages(@RequestBody List<Long> ids) {
-        mediaService.deleteMediaListWithStorage(ids);
-        return ResponseEntity.ok(ResponseUtil.buildOkResponse(null, AppConstants.MSG_DELETED));
-    }
+                Resource resource = imageService.downloadImage(gridFsId);
+                String contentType = imageService.getContentType(gridFsId)
+                                .orElse(MediaType.APPLICATION_OCTET_STREAM_VALUE);
+
+                return ResponseEntity.ok()
+                                .header(HttpHeaders.CONTENT_DISPOSITION,
+                                                "inline; filename=\"" + resource.getFilename() + "\"")
+                                .contentType(MediaType.parseMediaType(contentType))
+                                .contentLength(resource.contentLength())
+                                .body(resource);
+        }
+
+        @GetMapping("/fetch/{storageFileName}")
+        @Operation(summary = "Fetch Image by storageFileName(with cache busting)", description = "Looks up the GridFS filePath from the Media SQL record and streams the file based on cache busted storageFileName")
+        public ResponseEntity<Resource> downloadImageWithCacheBust(
+                        @PathVariable String storageFileName,
+                        @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch)
+                        throws IOException {
+                String eTag = "\"" + storageFileName + "\"";
+                CacheControl cacheControl = CacheControl.maxAge(365, TimeUnit.DAYS)
+                                .cachePublic()
+                                .immutable();
+                if (eTag.equals(ifNoneMatch)) {
+                        return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
+                                        .eTag(eTag)
+                                        .cacheControl(cacheControl)
+                                        .build();
+                }
+                String gridFsId = mediaService.getMediaByStorageFileName(storageFileName);
+                Resource resource = imageService.downloadImage(gridFsId);
+                String contentType = imageService.getContentType(gridFsId)
+                                .orElse(MediaType.APPLICATION_OCTET_STREAM_VALUE);
+                return ResponseEntity.ok()
+                                .header(HttpHeaders.CONTENT_DISPOSITION,
+                                                "inline; filename=\"" + resource.getFilename() + "\"")
+                                .cacheControl(cacheControl)
+                                .eTag(eTag)
+                                .contentType(MediaType.parseMediaType(contentType))
+                                .contentLength(resource.contentLength())
+                                .body(resource);
+        }
+        // ── Download (batch) ──────────────────────────────────────────────────────
+
+        @PostMapping("/batch/download")
+        @Operation(summary = "Batch Download Images as ZIP", description = "Accepts a list of Media SQL IDs and returns a ZIP archive "
+                        + "containing all the requested images. Each file is named by its storageFileName. "
+                        + "Unavailable files are skipped with an error_id_<id>.txt marker in the ZIP.")
+        public ResponseEntity<byte[]> batchDownloadImages(@RequestBody List<Long> ids) throws IOException {
+
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                try (ZipOutputStream zip = new ZipOutputStream(baos)) {
+                        for (Long id : ids) {
+                                try {
+                                        ImageResponse media = mediaService.getMediaById(id);
+                                        Resource resource = imageService.downloadImage(media.getFilePath());
+
+                                        zip.putNextEntry(new ZipEntry(media.getStorageFileName()));
+                                        try (InputStream in = resource.getInputStream()) {
+                                                in.transferTo(zip);
+                                        }
+                                        zip.closeEntry();
+                                } catch (Exception e) {
+                                        // Skip unavailable files — add an error marker entry so caller knows
+                                        zip.putNextEntry(new ZipEntry("error_id_" + id + ".txt"));
+                                        zip.write(("Could not download id=" + id + ": " + e.getMessage()).getBytes());
+                                        zip.closeEntry();
+                                }
+                        }
+                }
+
+                byte[] zipBytes = baos.toByteArray();
+                return ResponseEntity.ok()
+                                .header(HttpHeaders.CONTENT_DISPOSITION,
+                                                "attachment; filename=\"images_batch.zip\"")
+                                .contentType(MediaType.parseMediaType("application/zip"))
+                                .contentLength(zipBytes.length)
+                                .body(zipBytes);
+        }
+
+        // ── Update ────────────────────────────────────────────────────────────────
+
+        @PutMapping("/{id}")
+        @Operation(summary = "Update Image Metadata", description = "Updates mutable fields: altText, mediaType, isActive. "
+                        + "The storageFileName and public URL are not affected.")
+        public ResponseEntity<ApiResponse<ImageResponse>> updateImage(
+                        @PathVariable Long id,
+                        @Valid @RequestBody MediaRequestDto requestDto) {
+                ImageResponse response = mediaService.updateMedia(id, requestDto);
+                return ResponseEntity.ok(ResponseUtil.buildOkResponse(response, AppConstants.MSG_UPDATED));
+        }
+
+        // ── Delete ────────────────────────────────────────────────────────────────
+
+        @DeleteMapping("/{id}")
+        @Operation(summary = "Delete Image", description = "Permanently removes from GridFS and soft-deletes the SQL Media record")
+        public ResponseEntity<ApiResponse<Void>> deleteImage(@PathVariable Long id) {
+                mediaService.deleteMediaWithStorage(id);
+                return ResponseEntity.ok(ResponseUtil.buildOkResponse(null, AppConstants.MSG_DELETED));
+        }
+
+        @DeleteMapping("/batch")
+        @Operation(summary = "Batch Delete Images", description = "Deletes multiple images from GridFS and soft-deletes their SQL records")
+        public ResponseEntity<ApiResponse<Void>> deleteImages(@RequestBody List<Long> ids) {
+                mediaService.deleteMediaListWithStorage(ids);
+                return ResponseEntity.ok(ResponseUtil.buildOkResponse(null, AppConstants.MSG_DELETED));
+        }
 }

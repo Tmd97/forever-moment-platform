@@ -13,7 +13,6 @@ import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.*;
@@ -37,7 +36,11 @@ public class ImageService {
     /**
      * Upload an image to storage
      */
-    //TODO: currently, we are creating the new record in sql when the file comes for upload, but same file with changed content will come up, instead of new record, we can update the existing record with new content and metadata, this will help us to avoid duplicate records in sql and also help us to bust cache when same file with changed content comes up.
+    // TODO: currently, we are creating the new record in sql when the file comes
+    // for upload, but same file with changed content will come up, instead of new
+    // record, we can update the existing record with new content and metadata, this
+    // will help us to avoid duplicate records in sql and also help us to bust cache
+    // when same file with changed content comes up.
     public ImageResponse uploadImage(MultipartFile file, Map<String, Object> metadata) {
         try {
             // Prepare metadata
@@ -50,22 +53,21 @@ public class ImageService {
             String originalStorageFileName = FileExtension.generateTimestampName(originalName);
             byte[] sourceBytes = file.getBytes();
 
-            // Store the file 
+            // Store the file
             String id = storageService.store(
                     originalStorageFileName,
                     new ByteArrayInputStream(sourceBytes),
                     file.getContentType(),
-                    finalMetadata
-            );
+                    finalMetadata);
 
-            // Save metadata to SQL database (use unique name with timestamp help in bust cache)
+            // Save metadata to SQL database (use unique name with timestamp help in bust
+            // cache)
             ImageResponse mediaResponse = mediaService.saveMediaMetadata(
                     originalName,
                     originalStorageFileName,
-                    id,
+                    id, // this is a grid fs id or object storage id.
                     file.getContentType(),
-                    sourceBytes.length
-            );
+                    sourceBytes.length);
 
             saveVariants(mediaResponse, originalStorageFileName, id, file.getContentType(), sourceBytes, finalMetadata);
             mediaService.hydrateVariantUrls(mediaResponse);
@@ -143,6 +145,7 @@ public class ImageService {
         return response;
     }
 
+    // this method saving all the image variants like hero, thumb etc
     private void saveVariants(ImageResponse mediaResponse,
             String originalStorageFileName,
             String originalPath,
@@ -152,9 +155,9 @@ public class ImageService {
         Long mediaId = mediaResponse.getId();
 
         imageVariantService.saveOrUpdateVariant(mediaId, new ImageVariantService.VariantPayload(
-                MediaVariantType.ORIGINAL,
-                originalStorageFileName,
-                originalPath,
+                MediaVariantType.ORIGINAL, // save original variant
+                originalStorageFileName, // fileName with timestamp
+                originalPath, // gridfs Id of that(orignal) variant
                 originalContentType,
                 sourceBytes.length,
                 null,
@@ -176,7 +179,7 @@ public class ImageService {
                 new ByteArrayInputStream(hero.getBytes()),
                 hero.getMimeType(),
                 metadata);
-                
+
         imageVariantService.saveOrUpdateVariant(mediaId, new ImageVariantService.VariantPayload(
                 MediaVariantType.HERO,
                 heroStorageName,
