@@ -18,9 +18,7 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "app.image")
 public class ImageUrlConfig {
 
-    //TODO: think how it can be improved, multiple instances? port dynamic?
-    //sometime docker service, some time localhost, maybe some env variable?
-    private String baseUrl = "http://localhost:8081/api/platform";
+    private String baseUrl = "/api/platform";
     private String publicBaseUrl = "/public/images";
     private String adminBaseUrl = "/admin/images";
     private String cdnBaseUrl;
@@ -28,6 +26,14 @@ public class ImageUrlConfig {
     private boolean useCdn = false;
 
     // Getters and Setters
+    public String getBaseUrl() {
+        return baseUrl;
+    }
+
+    public void setBaseUrl(String baseUrl) {
+        this.baseUrl = baseUrl;
+    }
+
     public String getPublicBaseUrl() {
         return publicBaseUrl;
     }
@@ -77,9 +83,9 @@ public class ImageUrlConfig {
      */
     public String buildPublicUrl(String storageFileName) {
         if (useCdn && cdnBaseUrl != null) {
-            return cdnBaseUrl + "/fetch/" + storageFileName;
+            return joinUrl(cdnBaseUrl, "fetch", storageFileName);
         }
-        return publicBaseUrl + "/fetch/" + storageFileName;
+        return joinUrl(baseUrl, publicBaseUrl, "fetch", storageFileName);
     }
 
     /**
@@ -90,7 +96,7 @@ public class ImageUrlConfig {
      * @return the admin-facing image URL
      */
     public String buildAdminUrl(Long mediaId) {
-        return adminBaseUrl + "/" + mediaId;
+        return joinUrl(baseUrl, adminBaseUrl, String.valueOf(mediaId));
     }
 
     /**
@@ -106,8 +112,47 @@ public class ImageUrlConfig {
      */
     public String buildThumbnailUrl(String storageFileName) {
         if (useCdn && cdnBaseUrl != null) {
-            return cdnBaseUrl + "/fetch/" + storageFileName;
+            return joinUrl(cdnBaseUrl, "fetch", storageFileName);
         }
-        return publicBaseUrl + "/fetch/" + storageFileName;
+        return joinUrl(baseUrl, publicBaseUrl, "fetch", storageFileName);
+    }
+
+    private String joinUrl(String... parts) {
+        if (parts == null || parts.length == 0) {
+            return "";
+        }
+
+        StringBuilder result = new StringBuilder();
+        for (String part : parts) {
+            if (part == null || part.trim().isEmpty()) {
+                continue;
+            }
+            String token = part.trim();
+            if (result.length() == 0) {
+                result.append(stripTrailingSlash(token));
+                continue;
+            }
+            if (result.charAt(result.length() - 1) != '/') {
+                result.append('/');
+            }
+            result.append(stripLeadingSlash(token));
+        }
+        return result.toString();
+    }
+
+    private String stripTrailingSlash(String value) {
+        int end = value.length();
+        while (end > 1 && value.charAt(end - 1) == '/') {
+            end--;
+        }
+        return value.substring(0, end);
+    }
+
+    private String stripLeadingSlash(String value) {
+        int start = 0;
+        while (start < value.length() && value.charAt(start) == '/') {
+            start++;
+        }
+        return value.substring(start);
     }
 }

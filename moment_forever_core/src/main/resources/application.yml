@@ -175,7 +175,7 @@ app:
     serve-path: /uploads/
 
   image:
-    base-url: http://localhost:8081/api/platform
+    base-url: /api/platform
     public-base-url: /public/images
     admin-base-url: /admin/images
     cdn-base-url: https://cdn.momentforever.com/images
@@ -265,6 +265,7 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
     url: /v3/api-docs
+    persist-authorization: true
   api-docs:
     path: /v3/api-docs
 

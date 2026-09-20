@@ -48,10 +48,10 @@ public class MediaService {
      */
     @Transactional
     public ImageResponse saveMediaMetadata(String fileName,
-            String storageFileName,
-            String filePath,
-            String contentType,
-            long fileSize) {
+                                           String storageFileName,
+                                           String filePath,
+                                           String contentType,
+                                           long fileSize) {
         Media media = new Media();
         media.setFileName(fileName);
         media.setStorageFileName(storageFileName);
@@ -199,8 +199,6 @@ public class MediaService {
             return;
         }
 
-        // get all VariantUrls object for the given media id (from the table
-        // relationship)
         ImageVariantService.VariantUrls urls = imageVariantService.getUrlsForMedia(dto.getId());
         if (urls == null) {
             return;
