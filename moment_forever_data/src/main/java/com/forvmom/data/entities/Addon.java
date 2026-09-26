@@ -27,6 +27,10 @@ public class Addon extends NamedEntity {
     @Column(name = "icon")
     private String icon;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "media_id")
+    private Media imageMedia;
+
     @Column(name = "base_price", nullable = false, precision = 10, scale = 2)
     private BigDecimal basePrice;
 
@@ -62,6 +66,14 @@ public class Addon extends NamedEntity {
 
     public void setIcon(String icon) {
         this.icon = icon;
+    }
+
+    public Media getImageMedia() {
+        return imageMedia;
+    }
+
+    public void setImageMedia(Media imageMedia) {
+        this.imageMedia = imageMedia;
     }
 
     public BigDecimal getBasePrice() {

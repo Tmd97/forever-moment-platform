@@ -27,8 +27,6 @@ import java.util.List;
  * <p>
  * Attachment → /api/admin/experiences/{experienceId}/addons
  *
- * TODO: Image upload — every Addon has its own image to display with its
- * details.
  */
 @RestController
 @RequestMapping("/admin")

@@ -18,6 +18,12 @@ public interface ExperienceMediaMapperDao extends GenericDao<ExperienceMediaMapp
     /** Find the current primary/cover image mapper for an experience */
     ExperienceMediaMapper findPrimaryByExperienceId(Long experienceId);
 
+    /**
+     * Batch list-card lookup: returns active mapper rows for the given
+     * experiences, ordered so each experience's best card image appears first.
+     */
+    List<ExperienceMediaMapper> findActiveByExperienceIdsOrdered(List<Long> experienceIds);
+
     /** Find all experiences that currently reference a media record */
     List<Long> findExperienceIdsByMediaId(Long mediaId);
 }

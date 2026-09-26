@@ -16,13 +16,19 @@ import com.forvmom.data.dao.ExperienceMediaMapperDao;
 import com.forvmom.data.dao.SubCategoryDao;
 import com.forvmom.data.entities.Experience;
 import com.forvmom.data.entities.ExperienceDetail;
+import com.forvmom.data.entities.ExperienceMediaMapper;
+import com.forvmom.data.entities.Media;
 import com.forvmom.data.entities.SubCategory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -51,6 +57,7 @@ import java.util.stream.Collectors;
  */
 @Service
 public class ExperienceServiceImpl implements ExperienceService {
+    private static final Logger logger = LoggerFactory.getLogger(ExperienceServiceImpl.class);
 
     @Autowired
     private ExperienceDao experienceDao;
@@ -75,6 +82,9 @@ public class ExperienceServiceImpl implements ExperienceService {
 
     @Autowired
     private ExperienceMediaService experienceMediaService;
+
+    @Autowired
+    private ImageVariantService imageVariantService;
 
     /**
      * {@inheritDoc}
@@ -114,6 +124,7 @@ public class ExperienceServiceImpl implements ExperienceService {
         detail.setExperience(saved);
         ExperienceDetail savedDetail = experienceDetailDao.save(detail);
         saved.setDetail(savedDetail);
+        imageFlowCacheService.evictExperienceLists();
 
         return ExperienceBeanMapper.mapEntityToDto(saved, true);
     }
@@ -173,6 +184,7 @@ public class ExperienceServiceImpl implements ExperienceService {
 
         catalogCacheService.warmExperienceCache(updated);
         imageFlowCacheService.evictExperienceDetail(id);
+        imageFlowCacheService.evictExperienceLists();
 
         return ExperienceBeanMapper.mapEntityToDto(updated, true);
     }
@@ -203,8 +215,10 @@ public class ExperienceServiceImpl implements ExperienceService {
     public ExperienceResponseDto getById(Long id) {
         ExperienceResponseDto cached = imageFlowCacheService.getExperienceDetail(id);
         if (cached != null) {
+            logger.info("Cache hit: experience detail key exp:detail:{}:v2", id);
             return cached;
         }
+        logger.info("Cache miss: experience detail key exp:detail:{}:v2; loading from DB", id);
 
         // Query 1: experience + detail + subCategory + inclusionMappers (JOIN FETCH)
         Experience experience = experienceDao.findByIdWithDetail(id);
@@ -263,12 +277,22 @@ public class ExperienceServiceImpl implements ExperienceService {
     @Override
     @Transactional(readOnly = true)
     public List<ExperienceHighlightResponseDto> getAll() {
+        List<ExperienceHighlightResponseDto> cached = imageFlowCacheService.getExperienceListAll();
+        if (cached != null) {
+            logger.info("Cache hit: experience list key exp:list:all:v2:all");
+            return cached;
+        }
+        logger.info("Cache miss: experience list key exp:list:all:v2:all; loading from DB");
+
         List<Experience> experiences = experienceDao.findAllWithDetail();
         if (experiences == null || experiences.isEmpty())
             return new ArrayList<>();
-        return experiences.stream()
+        List<ExperienceHighlightResponseDto> highlights = experiences.stream()
                 .map(ExperienceBeanMapper::mapEntityToHighlightDto)
                 .collect(Collectors.toList());
+        enrichHighlightsWithCardImages(highlights);
+        imageFlowCacheService.putExperienceListAll(highlights);
+        return highlights;
     }
 
     /**
@@ -279,12 +303,22 @@ public class ExperienceServiceImpl implements ExperienceService {
     @Override
     @Transactional(readOnly = true)
     public List<ExperienceHighlightResponseDto> getAllActive() {
+        List<ExperienceHighlightResponseDto> cached = imageFlowCacheService.getExperienceListActive();
+        if (cached != null) {
+            logger.info("Cache hit: experience list key exp:list:active:v2:all");
+            return cached;
+        }
+        logger.info("Cache miss: experience list key exp:list:active:v2:all; loading from DB");
+
         List<Experience> experiences = experienceDao.findAllActive();
         if (experiences == null || experiences.isEmpty())
             return new ArrayList<>();
-        return experiences.stream()
+        List<ExperienceHighlightResponseDto> highlights = experiences.stream()
                 .map(ExperienceBeanMapper::mapEntityToHighlightDto)
                 .collect(Collectors.toList());
+        enrichHighlightsWithCardImages(highlights);
+        imageFlowCacheService.putExperienceListActive(highlights);
+        return highlights;
     }
 
     /**
@@ -300,13 +334,23 @@ public class ExperienceServiceImpl implements ExperienceService {
     @Override
     @Transactional(readOnly = true)
     public List<ExperienceHighlightResponseDto> getBySubCategory(Long subCategoryId) {
+        List<ExperienceHighlightResponseDto> cached = imageFlowCacheService.getExperienceListBySubCategory(subCategoryId);
+        if (cached != null) {
+            logger.info("Cache hit: experience list key exp:list:subcategory:{}:v2:all", subCategoryId);
+            return cached;
+        }
+        logger.info("Cache miss: experience list key exp:list:subcategory:{}:v2:all; loading from DB", subCategoryId);
+
         List<Experience> experiences = experienceDao.findBySubCategoryId(subCategoryId);
         if (experiences == null || experiences.isEmpty()) {
             throw new ResourceNotFoundException("No experiences found for sub-category id " + subCategoryId);
         }
-        return experiences.stream()
+        List<ExperienceHighlightResponseDto> highlights = experiences.stream()
                 .map(ExperienceBeanMapper::mapEntityToHighlightDto)
                 .collect(Collectors.toList());
+        enrichHighlightsWithCardImages(highlights);
+        imageFlowCacheService.putExperienceListBySubCategory(subCategoryId, highlights);
+        return highlights;
     }
 
     /**
@@ -317,12 +361,22 @@ public class ExperienceServiceImpl implements ExperienceService {
     @Override
     @Transactional(readOnly = true)
     public List<ExperienceHighlightResponseDto> getFeatured() {
+        List<ExperienceHighlightResponseDto> cached = imageFlowCacheService.getExperienceListFeatured();
+        if (cached != null) {
+            logger.info("Cache hit: experience list key exp:list:featured:v2:all");
+            return cached;
+        }
+        logger.info("Cache miss: experience list key exp:list:featured:v2:all; loading from DB");
+
         List<Experience> experiences = experienceDao.findFeatured();
         if (experiences == null || experiences.isEmpty())
             return new ArrayList<>();
-        return experiences.stream()
+        List<ExperienceHighlightResponseDto> highlights = experiences.stream()
                 .map(ExperienceBeanMapper::mapEntityToHighlightDto)
                 .collect(Collectors.toList());
+        enrichHighlightsWithCardImages(highlights);
+        imageFlowCacheService.putExperienceListFeatured(highlights);
+        return highlights;
     }
 
     /**
@@ -353,6 +407,7 @@ public class ExperienceServiceImpl implements ExperienceService {
         // Evict from cache
         catalogCacheService.evictExperience(id);
         imageFlowCacheService.evictExperienceDetail(id);
+        imageFlowCacheService.evictExperienceLists();
 
         return true;
     }
@@ -377,6 +432,7 @@ public class ExperienceServiceImpl implements ExperienceService {
         Experience updated = experienceDao.update(existing);
         catalogCacheService.warmExperienceCache(updated);
         imageFlowCacheService.evictExperienceDetail(id);
+        imageFlowCacheService.evictExperienceLists();
     }
 
     /**
@@ -400,6 +456,7 @@ public class ExperienceServiceImpl implements ExperienceService {
         Experience updated = experienceDao.update(existing);
         catalogCacheService.warmExperienceCache(updated);
         imageFlowCacheService.evictExperienceDetail(id);
+        imageFlowCacheService.evictExperienceLists();
     }
 
     /**
@@ -433,8 +490,73 @@ public class ExperienceServiceImpl implements ExperienceService {
                 ? experienceDetailDao.save(detail)
                 : experienceDetailDao.update(detail);
         imageFlowCacheService.evictExperienceDetail(experienceId);
+        imageFlowCacheService.evictExperienceLists();
 
         return ExperienceBeanMapper.mapDetailToDto(saved);
+    }
+
+    private void enrichHighlightsWithCardImages(List<ExperienceHighlightResponseDto> highlights) {
+        if (highlights == null || highlights.isEmpty()) {
+            return;
+        }
+
+        Map<Long, ExperienceHighlightResponseDto> highlightsByExperienceId = highlights.stream()
+                .filter(dto -> dto.getId() != null)
+                .collect(Collectors.toMap(
+                        ExperienceHighlightResponseDto::getId,
+                        dto -> dto,
+                        (left, right) -> left,
+                        LinkedHashMap::new));
+        if (highlightsByExperienceId.isEmpty()) {
+            return;
+        }
+
+        List<ExperienceMediaMapper> mediaMappers = experienceMediaMapperDao.findActiveByExperienceIdsOrdered(
+                new ArrayList<>(highlightsByExperienceId.keySet()));
+        if (mediaMappers.isEmpty()) {
+            return;
+        }
+
+        Map<Long, ExperienceMediaMapper> selectedByExperienceId = new LinkedHashMap<>();
+        for (ExperienceMediaMapper mapper : mediaMappers) {
+            if (mapper.getExperience() == null || mapper.getExperience().getId() == null || mapper.getMedia() == null) {
+                continue;
+            }
+            selectedByExperienceId.putIfAbsent(mapper.getExperience().getId(), mapper);
+        }
+        if (selectedByExperienceId.isEmpty()) {
+            return;
+        }
+
+        List<Long> mediaIds = selectedByExperienceId.values().stream()
+                .map(ExperienceMediaMapper::getMedia)
+                .map(Media::getId)
+                .collect(Collectors.toList());
+        Map<Long, ImageVariantService.VariantUrls> variantUrlsByMediaId = imageVariantService.getUrlsForMediaIds(mediaIds);
+
+        for (Map.Entry<Long, ExperienceMediaMapper> entry : selectedByExperienceId.entrySet()) {
+            ExperienceHighlightResponseDto dto = highlightsByExperienceId.get(entry.getKey());
+            if (dto == null) {
+                continue;
+            }
+
+            ExperienceMediaMapper mapper = entry.getValue();
+            Media media = mapper.getMedia();
+            ImageVariantService.VariantUrls urls = variantUrlsByMediaId.get(media.getId());
+
+            if (urls != null) {
+                dto.setHeroUrl(urls.getHeroUrl());
+                dto.setThumbnailUrl(urls.getThumbnailUrl());
+                dto.setOriginalUrl(urls.getOriginalUrl());
+            } else if (media.getStorageFileName() != null) {
+                String fallbackUrl = imageUrlConfig.buildPublicUrl(media.getStorageFileName());
+                dto.setHeroUrl(fallbackUrl);
+                dto.setThumbnailUrl(fallbackUrl);
+                dto.setOriginalUrl(fallbackUrl);
+            }
+
+            dto.setImageAltText(mapper.getAltText() != null ? mapper.getAltText() : media.getAltText());
+        }
     }
 
     /**

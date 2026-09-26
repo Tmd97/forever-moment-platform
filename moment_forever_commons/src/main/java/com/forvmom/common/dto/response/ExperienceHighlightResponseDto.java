@@ -8,6 +8,8 @@ import java.util.Date;
  * /subcategory/{id}).
  * Contains only the fields needed for listing cards — NO ExperienceDetail
  * embedded.
+ * Includes one lightweight card-image set (hero/thumbnail/original) so list
+ * UIs can render without calling the heavy detail endpoint.
  * Extra fields can be added here without affecting the full single-item
  * response.
  */
@@ -32,6 +34,10 @@ public class ExperienceHighlightResponseDto {
     private Integer durationMinutes;
     private Integer maxCapacity;
     private String shortDescription;
+    private String heroUrl;
+    private String thumbnailUrl;
+    private String originalUrl;
+    private String imageAltText;
 
     private Date createdOn;
     private Date updatedOn;
@@ -154,6 +160,38 @@ public class ExperienceHighlightResponseDto {
 
     public void setShortDescription(String shortDescription) {
         this.shortDescription = shortDescription;
+    }
+
+    public String getHeroUrl() {
+        return heroUrl;
+    }
+
+    public void setHeroUrl(String heroUrl) {
+        this.heroUrl = heroUrl;
+    }
+
+    public String getThumbnailUrl() {
+        return thumbnailUrl;
+    }
+
+    public void setThumbnailUrl(String thumbnailUrl) {
+        this.thumbnailUrl = thumbnailUrl;
+    }
+
+    public String getOriginalUrl() {
+        return originalUrl;
+    }
+
+    public void setOriginalUrl(String originalUrl) {
+        this.originalUrl = originalUrl;
+    }
+
+    public String getImageAltText() {
+        return imageAltText;
+    }
+
+    public void setImageAltText(String imageAltText) {
+        this.imageAltText = imageAltText;
     }
 
     public Date getCreatedOn() {

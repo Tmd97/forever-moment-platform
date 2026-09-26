@@ -24,10 +24,14 @@ public class ExperienceAddonResponseDto {
 
     /** Master Addon.id */
     private Long addonId;
+    private Long mediaId;
 
     private String name;
     private String description;
     private String icon;
+    private String heroUrl;
+    private String thumbnailUrl;
+    private String originalUrl;
 
     /** Addon.basePrice — the global default price */
     private BigDecimal basePrice;
@@ -68,6 +72,14 @@ public class ExperienceAddonResponseDto {
         this.addonId = addonId;
     }
 
+    public Long getMediaId() {
+        return mediaId;
+    }
+
+    public void setMediaId(Long mediaId) {
+        this.mediaId = mediaId;
+    }
+
     public String getName() {
         return name;
     }
@@ -90,6 +102,30 @@ public class ExperienceAddonResponseDto {
 
     public void setIcon(String icon) {
         this.icon = icon;
+    }
+
+    public String getHeroUrl() {
+        return heroUrl;
+    }
+
+    public void setHeroUrl(String heroUrl) {
+        this.heroUrl = heroUrl;
+    }
+
+    public String getThumbnailUrl() {
+        return thumbnailUrl;
+    }
+
+    public void setThumbnailUrl(String thumbnailUrl) {
+        this.thumbnailUrl = thumbnailUrl;
+    }
+
+    public String getOriginalUrl() {
+        return originalUrl;
+    }
+
+    public void setOriginalUrl(String originalUrl) {
+        this.originalUrl = originalUrl;
     }
 
     public BigDecimal getBasePrice() {

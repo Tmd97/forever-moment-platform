@@ -17,7 +17,9 @@ public class AddonDaoImpl extends GenericDaoImpl<Addon, Long> implements AddonDa
     @Override
     public List<Addon> findAll() {
         return em.createQuery(
-                "SELECT a FROM Addon a WHERE a.deleted = false ORDER BY a.name ASC",
+                "SELECT a FROM Addon a " +
+                        "LEFT JOIN FETCH a.imageMedia m " +
+                        "WHERE a.deleted = false ORDER BY a.name ASC",
                 Addon.class).getResultList();
     }
 

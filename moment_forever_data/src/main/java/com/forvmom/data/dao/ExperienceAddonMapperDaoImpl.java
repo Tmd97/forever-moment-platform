@@ -20,6 +20,7 @@ public class ExperienceAddonMapperDaoImpl extends GenericDaoImpl<ExperienceAddon
         return em.createQuery(
                 "SELECT m FROM ExperienceAddonMapper m " +
                         "JOIN FETCH m.addon a " +
+                        "LEFT JOIN FETCH a.imageMedia im " +
                         "WHERE m.experience.id = :expId AND m.deleted = false " +
                         "ORDER BY a.name ASC",
                 ExperienceAddonMapper.class)

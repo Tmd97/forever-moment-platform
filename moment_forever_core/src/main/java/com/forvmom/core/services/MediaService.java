@@ -11,6 +11,8 @@ import com.forvmom.data.entities.Media;
 import com.forvmom.data.entities.MediaVariant;
 import com.forvmom.store.api.ObjectStorageService;
 import com.forvmom.store.dto.ImageResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +22,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class MediaService {
+    private static final Logger logger = LoggerFactory.getLogger(MediaService.class);
 
     @Autowired
     private MediaDao mediaDao;
@@ -83,8 +86,10 @@ public class MediaService {
     public String getMediaByStorageFileName(String storageFileName) {
         String cachedPath = imageFlowCacheService.getResolvedFilePath(storageFileName);
         if (cachedPath != null) {
+            logger.info("Cache hit: image resolve key img:resolve:{}", storageFileName);
             return cachedPath;
         }
+        logger.info("Cache miss: image resolve key img:resolve:{}; loading from DB", storageFileName);
 
         String filePath = mediaDao.findGridFsIdByStorageFileName(storageFileName);
         if (filePath == null) {
@@ -192,6 +197,7 @@ public class MediaService {
         for (Long experienceId : experienceMediaMapperDao.findExperienceIdsByMediaId(mediaId)) {
             imageFlowCacheService.evictExperienceDetail(experienceId);
         }
+        imageFlowCacheService.evictExperienceLists();
     }
 
     public void hydrateVariantUrls(ImageResponse dto) {

@@ -75,6 +75,7 @@ public class ExperienceMediaService {
                 experienceMediaMapperDao.save(mapper), imageUrlConfig);
         applyVariantUrls(Collections.singletonList(response));
         imageFlowCacheService.evictExperienceDetail(experienceId);
+        imageFlowCacheService.evictExperienceLists();
         return response;
     }
 
@@ -103,6 +104,7 @@ public class ExperienceMediaService {
         }
         if (!attached.isEmpty()) {
             imageFlowCacheService.evictExperienceDetail(experienceId);
+            imageFlowCacheService.evictExperienceLists();
         }
         return new BulkAttachMediaResultDto(attached, skipped);
     }
@@ -146,6 +148,7 @@ public class ExperienceMediaService {
                 experienceMediaMapperDao.update(mapper), imageUrlConfig);
         applyVariantUrls(Collections.singletonList(response));
         imageFlowCacheService.evictExperienceDetail(experienceId);
+        imageFlowCacheService.evictExperienceLists();
         return response;
     }
 
@@ -156,6 +159,7 @@ public class ExperienceMediaService {
         ExperienceMediaMapper mapper = findMapperOrThrow(experienceId, mediaId);
         experienceMediaMapperDao.delete(mapper);
         imageFlowCacheService.evictExperienceDetail(experienceId);
+        imageFlowCacheService.evictExperienceLists();
     }
 
     @Transactional
@@ -166,6 +170,7 @@ public class ExperienceMediaService {
         mapper.setIsActive(!Boolean.TRUE.equals(mapper.getIsActive()));
         experienceMediaMapperDao.update(mapper);
         imageFlowCacheService.evictExperienceDetail(mapper.getExperience().getId());
+        imageFlowCacheService.evictExperienceLists();
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

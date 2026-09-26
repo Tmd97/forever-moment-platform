@@ -14,6 +14,7 @@ public class AddonRequestDto {
     private String description;
 
     private String icon;
+    private Long mediaId;
 
     @NotNull(message = "Base price is required")
     @DecimalMin(value = "0.0", inclusive = true, message = "Base price must be >= 0")
@@ -43,6 +44,14 @@ public class AddonRequestDto {
 
     public void setIcon(String icon) {
         this.icon = icon;
+    }
+
+    public Long getMediaId() {
+        return mediaId;
+    }
+
+    public void setMediaId(Long mediaId) {
+        this.mediaId = mediaId;
     }
 
     public BigDecimal getBasePrice() {

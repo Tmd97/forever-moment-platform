@@ -999,3 +999,205 @@ When any of these operations run, `exp:detail:{id}:v2` is evicted:
 - media update/delete (for all linked experiences via `findExperienceIdsByMediaId`)
 
 This keeps experience page payload consistent with SQL + variant state.
+
+---
+
+## 16. Experience list caching strategy for image-heavy pages
+
+This section documents a shipping-ready Redis strategy for list pages
+(cards/carousels), including **non-paginated** and paginated key shapes.
+
+### Business intent
+
+The storefront list/grid UX needs to feel instant even when every card shows an
+image. Returning image URLs directly in list payloads avoids extra per-card
+detail calls, and Redis avoids rebuilding the same list response repeatedly.
+
+### What is cached (and what is not)
+
+- Cached:
+  - experience list DTO payloads (`ExperienceHighlightResponseDto`)
+  - metadata and image URLs (`heroUrl`, `thumbnailUrl`, `originalUrl`, `imageAltText`)
+- Not cached:
+  - binary image bytes (still streamed from GridFS/S3 via fetch endpoint)
+
+So memory growth is from JSON payloads, not image files.
+
+### Key design (current + forward-compatible)
+
+#### A) Non-paginated keys (implemented)
+
+Use these when a client asks for full list without page parameters:
+
+- `exp:list:all:v2:all`
+- `exp:list:active:v2:all`
+- `exp:list:featured:v2:all`
+- `exp:list:subcategory:{subCategoryId}:v2:all`
+
+#### B) Paginated keys (implemented at cache layer, enable when API paginates)
+
+- `exp:list:active:v2:page:{p}:size:{s}`
+- `exp:list:featured:v2:page:{p}:size:{s}`
+- `exp:list:subcategory:{subCategoryId}:v2:page:{p}:size:{s}`
+
+#### Why both are needed
+
+- Some clients still call non-paginated list APIs.
+- New clients can move to paginated APIs for memory and latency control.
+- Shared version marker (`v2`) allows contract-safe key migration.
+
+TTL: `10 minutes` (same window used by detail metadata cache).
+
+### Read flow
+
+1. List endpoint checks Redis by list key.
+2. On cache hit, returns list payload immediately.
+3. On cache miss:
+   - loads list records from SQL
+   - enriches one card image per experience (primary > display order fallback)
+   - resolves variant URLs in batch
+   - stores final list JSON in Redis and returns response.
+
+### Invalidation flow (list cache)
+
+List keys are evicted on experience or media mutations that can change card
+visibility, order, or image URLs, including:
+
+- experience create/update/delete
+- toggle active / toggle featured
+- detail upsert
+- media attach/update/detach/toggle active
+- media update/delete affecting linked experiences
+
+Operationally, current implementation invalidates all list keys via:
+
+- pattern delete: `exp:list:*`
+
+This is simple and safe. As traffic grows, move to targeted invalidation by
+key family (for example only affected subcategory keys).
+
+### Manual eviction runbook
+
+Use manual eviction for emergency content correction, large reindex/imports, or
+cache poisoning suspicion.
+
+#### Option 1: Redis CLI (fastest operations path)
+
+```bash
+redis-cli --scan --pattern 'exp:list:*' | xargs redis-cli del
+```
+
+#### Option 2: App-level helper
+
+`ImageFlowCacheService.evictExperienceLists()` can be invoked from an admin
+operation/job if you expose an internal maintenance endpoint.
+
+#### Safety notes
+
+- This only clears metadata list payloads, not image binaries.
+- On next requests, cache will repopulate from DB + enrichment pipeline.
+
+### Peak-time DB protection
+
+During peak traffic (home page, festival campaigns, ad bursts), the same list
+responses are requested repeatedly. With list caching:
+
+1. repeated reads hit Redis instead of SQL joins/mapping for each request
+2. variant URL hydration is reused from cached payloads
+3. DB pressure drops to mutation-time and cache-miss windows
+
+Expected benefit pattern:
+
+- lower DB QPS for list endpoints
+- lower p95/p99 response time for card-heavy pages
+- reduced CPU cost in app layer from repeated DTO enrichment
+
+### Why this is safe for scale
+
+- No image bytes in Redis.
+- URLs are immutable by timestamped storage names, so cached list JSON remains
+  stable for the TTL window.
+- Heavy read traffic shifts from SQL + mapping to Redis lookups.
+
+### Implementation plan (shipping sequence)
+
+1. **Phase 1 (done):**
+   - cache list responses with non-paginated keys
+   - evict on experience/media mutations
+   - retain 10-minute TTL
+2. **Phase 2 (recommended):**
+   - expose paginated list APIs (page/size)
+   - write/read paginated cache keys
+   - keep non-paginated keys for backward compatibility
+3. **Phase 3 (scale hardening):**
+   - switch from global `exp:list:*` eviction to targeted key invalidation
+   - add Redis key-count and memory dashboards
+   - add hit-rate metrics per key family
+4. **Phase 4 (optional):**
+   - compress very large payloads
+   - background warmup for featured/subcategory keys before campaign peaks
+
+### Interview talking points (senior Java/system design)
+
+- **Q:** Why keep non-paginated keys if pagination exists?
+  **A:** Backward compatibility. Existing clients may request full lists; the
+  explicit `:all` key keeps behavior deterministic while paginated consumers
+  get bounded payload keys.
+
+- **Q:** Why evict by pattern initially?
+  **A:** Faster to ship safely. Correctness first, then optimize to targeted
+  invalidation as access patterns stabilize.
+
+- **Q:** Aren’t we storing too much in Redis?
+  **A:** We cache only metadata + URLs, not image bytes. Memory is manageable
+  with TTL, key versioning, and eventual pagination.
+
+- **Q:** How does this reduce peak DB load?
+  **A:** Repeat list reads become Redis lookups, eliminating repeated SQL +
+  variant URL enrichment work for hot routes.
+
+---
+
+## 17. Addon image URL + caching strategy (Phase 2 extension)
+
+Addons are shown inside experience purchase flows, so they need the same image
+URL consistency and cache behavior as experiences.
+
+### What is now included in addon APIs
+
+- `GET /api/admin/addons`
+  - each addon DTO includes:
+    - `mediaId`
+    - `heroUrl`
+    - `thumbnailUrl`
+    - `originalUrl`
+- `GET /api/admin/experiences/{experienceId}/addons`
+  - each experience-addon DTO includes the same URL fields.
+
+URLs are resolved from media variants (`HERO`, `THUMB`, `ORIGINAL`) using the
+same gateway-compatible URL builder used by experience flows.
+
+### Redis keys for addon list payloads
+
+- Master addon list:
+  - `addon:list:all:v1:all`
+- Addons by experience:
+  - `exp:addons:{experienceId}:v1:all`
+
+TTL is 10 minutes (metadata only, no image bytes).
+
+### Read and invalidation model
+
+- On read:
+  - cache hit returns DTO list immediately
+  - cache miss loads DB rows, hydrates variant URLs in batch, then caches result
+- On writes (create/update/delete addon, attach/detach addon):
+  - evict `addon:list:all:v1:all`
+  - evict affected `exp:addons:{experienceId}:v1:all` when experience-specific
+    mapping changes
+  - on addon master changes, evict `exp:addons:*` for correctness.
+
+### Operational value
+
+This reduces repeated DB joins and URL enrichment work for high-traffic booking
+paths while keeping payloads lightweight and gateway-safe.
