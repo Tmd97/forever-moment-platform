@@ -20,6 +20,9 @@ public interface AddonService {
     /** Update a master addon record */
     AddonResponseDto updateAddon(Long id, AddonRequestDto requestDto);
 
+    /** Attach/update image media for a master addon record */
+    AddonResponseDto updateAddonImage(Long id, Long mediaId);
+
     /**
      * Soft-delete a master addon record.
      * Also soft-deletes all junction rows to remove it from all experiences.

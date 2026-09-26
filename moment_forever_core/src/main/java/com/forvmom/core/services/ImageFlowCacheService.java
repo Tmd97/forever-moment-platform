@@ -7,6 +7,7 @@ import com.forvmom.common.dto.response.AddonResponseDto;
 import com.forvmom.common.dto.response.ExperienceAddonResponseDto;
 import com.forvmom.common.dto.response.ExperienceHighlightResponseDto;
 import com.forvmom.common.dto.response.ExperienceResponseDto;
+import com.forvmom.common.dto.response.PromotionImageResponseDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -30,6 +31,7 @@ public class ImageFlowCacheService {
     private static final long EXPERIENCE_DETAIL_TTL_MINUTES = 10;
     private static final long EXPERIENCE_LIST_TTL_MINUTES = 10;
     private static final long IMAGE_RESOLVE_TTL_HOURS = 2;
+    private static final long PROMOTION_LIST_TTL_MINUTES = 5;
 
     private final StringRedisTemplate redis;
     private final ObjectMapper objectMapper;
@@ -206,6 +208,55 @@ public class ImageFlowCacheService {
         logger.info("Experience addon list eviction: removed {} key(s) for pattern exp:addons:*", keys.size());
     }
 
+    public List<PromotionImageResponseDto> getPromotionList(String key, String placement) {
+        String cacheKey = promotionListKey(key, placement);
+        String json = redis.opsForValue().get(cacheKey);
+        if (json == null) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<PromotionImageResponseDto>>() {
+            });
+        } catch (JsonProcessingException e) {
+            logger.error("Failed to deserialize promotion list cache for key={}", cacheKey, e);
+            return null;
+        }
+    }
+
+    public void putPromotionList(String key, String placement, List<PromotionImageResponseDto> response) {
+        putPayload(promotionListKey(key, placement), response, PROMOTION_LIST_TTL_MINUTES, TimeUnit.MINUTES);
+    }
+
+    public PromotionImageResponseDto getPromotionSingle(String key, String placement) {
+        String cacheKey = promotionSingleKey(key, placement);
+        String json = redis.opsForValue().get(cacheKey);
+        if (json == null) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(json, PromotionImageResponseDto.class);
+        } catch (JsonProcessingException e) {
+            logger.error("Failed to deserialize promotion single cache for key={}", cacheKey, e);
+            return null;
+        }
+    }
+
+    public void putPromotionSingle(String key, String placement, PromotionImageResponseDto response) {
+        putPayload(promotionSingleKey(key, placement), response, PROMOTION_LIST_TTL_MINUTES, TimeUnit.MINUTES);
+    }
+
+    public void evictPromotionCaches() {
+        Set<String> listKeys = redis.keys("promo:list:*");
+        if (listKeys != null && !listKeys.isEmpty()) {
+            redis.delete(listKeys);
+        }
+
+        Set<String> singleKeys = redis.keys("promo:single:*");
+        if (singleKeys != null && !singleKeys.isEmpty()) {
+            redis.delete(singleKeys);
+        }
+    }
+
     private String experienceDetailKey(Long experienceId) {
         return "exp:detail:" + experienceId + ":v2";
     }
@@ -278,6 +329,18 @@ public class ImageFlowCacheService {
             return "exp:addons:none:v1:all";
         }
         return "exp:addons:" + experienceId + ":v1:all";
+    }
+
+    private String promotionListKey(String key, String placement) {
+        return "promo:list:" + key + ":" + normalizedPlacement(placement) + ":v1";
+    }
+
+    private String promotionSingleKey(String key, String placement) {
+        return "promo:single:" + key + ":" + normalizedPlacement(placement) + ":v1";
+    }
+
+    private String normalizedPlacement(String placement) {
+        return placement == null || placement.isBlank() ? "all" : placement;
     }
 
     private void putPayload(String key, Object response, long ttl, TimeUnit timeUnit) {

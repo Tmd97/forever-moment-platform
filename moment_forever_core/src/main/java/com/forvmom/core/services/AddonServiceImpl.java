@@ -107,6 +107,22 @@ public class AddonServiceImpl implements AddonService {
 
     @Override
     @Transactional
+    public AddonResponseDto updateAddonImage(Long id, Long mediaId) {
+        Addon existing = addonDao.findById(id);
+        if (existing == null) {
+            throw new ResourceNotFoundException("Addon not found: " + id);
+        }
+
+        existing.setImageMedia(resolveAddonMedia(mediaId));
+        AddonResponseDto response = AddonBeanMapper.mapAddonToDto(addonDao.update(existing));
+        hydrateAddonImageUrls(Collections.singletonList(response));
+        imageFlowCacheService.evictAddonMasterList();
+        imageFlowCacheService.evictAllExperienceAddonLists();
+        return response;
+    }
+
+    @Override
+    @Transactional
     public boolean deleteAddon(Long id) {
         Addon existing = addonDao.findById(id);
         if (existing == null)

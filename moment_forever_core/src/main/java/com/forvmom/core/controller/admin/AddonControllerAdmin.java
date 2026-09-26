@@ -8,15 +8,23 @@ import com.forvmom.common.dto.response.ExperienceAddonResponseDto;
 import com.forvmom.common.response.ApiResponse;
 import com.forvmom.common.response.ResponseUtil;
 import com.forvmom.core.services.AddonService;
+import com.forvmom.core.services.ImageService;
+import com.forvmom.core.services.MediaService;
+import com.forvmom.store.dto.ImageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Admin controller for managing master Addon records
@@ -33,10 +41,19 @@ import java.util.List;
 @Tag(name = "Admin Addon API", description = "Master CRUD for addons and per-experience attachment with price override (Admin only)")
 public class AddonControllerAdmin {
 
-    private final AddonService addonService;
+    private static final Logger logger = LoggerFactory.getLogger(AddonControllerAdmin.class);
 
-    public AddonControllerAdmin(AddonService addonService) {
+    private final AddonService addonService;
+    private final ImageService imageService;
+    private final MediaService mediaService;
+
+    public AddonControllerAdmin(
+            AddonService addonService,
+            ImageService imageService,
+            MediaService mediaService) {
         this.addonService = addonService;
+        this.imageService = imageService;
+        this.mediaService = mediaService;
     }
 
     // ── Master Addon CRUD ─────────────────────────────────────────────────────
@@ -63,6 +80,24 @@ public class AddonControllerAdmin {
             @Valid @RequestBody AddonRequestDto requestDto) {
         AddonResponseDto result = addonService.updateAddon(id, requestDto);
         return ResponseEntity.ok(ResponseUtil.buildOkResponse(result, "Addon updated successfully"));
+    }
+
+    @PostMapping(value = "/addons/{id}/image/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Upload and Attach Image to Addon", description = "Uploads an image and immediately attaches it to the addon in one API call. "
+            + "If addon attach fails after upload, uploaded media is cleaned up.")
+    public ResponseEntity<ApiResponse<?>> uploadAndAttachAddonImage(
+            @PathVariable Long id,
+            @RequestParam("file") MultipartFile file,
+            @RequestParam Map<String, Object> metadata) {
+        ImageResponse uploaded = imageService.uploadImage(file, metadata);
+        try {
+            AddonResponseDto result = addonService.updateAddonImage(id, uploaded.getId());
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(ResponseUtil.buildCreatedResponse(result, "Addon image uploaded and attached successfully"));
+        } catch (RuntimeException exception) {
+            cleanupUploadedMedia(uploaded.getId());
+            throw exception;
+        }
     }
 
     @DeleteMapping("/addons/{id}")
@@ -114,5 +149,13 @@ public class AddonControllerAdmin {
             @PathVariable Long addonId) {
         addonService.detachFromExperience(experienceId, addonId);
         return ResponseEntity.noContent().build();
+    }
+
+    private void cleanupUploadedMedia(Long mediaId) {
+        try {
+            mediaService.deleteMediaWithStorage(mediaId);
+        } catch (RuntimeException cleanupException) {
+            logger.error("Failed cleanup for uploaded mediaId={} after addon attach failure", mediaId, cleanupException);
+        }
     }
 }

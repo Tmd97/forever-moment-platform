@@ -7,6 +7,7 @@ import com.forvmom.core.mapper.MediaBeanMapper;
 import com.forvmom.data.dao.ExperienceMediaMapperDao;
 import com.forvmom.data.dao.MediaDao;
 import com.forvmom.data.dao.MediaVariantDao;
+import com.forvmom.data.dao.PromotionAssetDao;
 import com.forvmom.data.entities.Media;
 import com.forvmom.data.entities.MediaVariant;
 import com.forvmom.store.api.ObjectStorageService;
@@ -44,6 +45,9 @@ public class MediaService {
 
     @Autowired
     private MediaVariantDao mediaVariantDao;
+
+    @Autowired
+    private PromotionAssetDao promotionAssetDao;
 
     /**
      * Save media metadata to SQL database after file is uploaded to storage.
@@ -149,6 +153,7 @@ public class MediaService {
         Media updated = mediaDao.update(media);
         imageFlowCacheService.putResolvedFilePath(updated.getStorageFileName(), updated.getFilePath());
         evictExperienceDetailsForMedia(updated.getId());
+        evictPromotionCachesIfNeeded(updated.getId());
         ImageResponse response = MediaBeanMapper.mapEntityToDto(updated, imageUrlConfig);
         hydrateVariantUrls(response);
         return response;
@@ -173,6 +178,7 @@ public class MediaService {
         storageService.delete(media.getFilePath());
         mediaDao.delete(media);
         imageFlowCacheService.evictResolvedFilePath(media.getStorageFileName());
+        evictPromotionCachesIfNeeded(media.getId());
     }
 
     /**
@@ -198,6 +204,12 @@ public class MediaService {
             imageFlowCacheService.evictExperienceDetail(experienceId);
         }
         imageFlowCacheService.evictExperienceLists();
+    }
+
+    private void evictPromotionCachesIfNeeded(Long mediaId) {
+        if (promotionAssetDao.existsByMediaId(mediaId)) {
+            imageFlowCacheService.evictPromotionCaches();
+        }
     }
 
     public void hydrateVariantUrls(ImageResponse dto) {
