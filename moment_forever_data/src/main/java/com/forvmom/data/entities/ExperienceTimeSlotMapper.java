@@ -31,8 +31,9 @@ public class ExperienceTimeSlotMapper {
     @Column(name = "price_override", precision = 10, scale = 2)
     private BigDecimal priceOverride;
 
+    //keep now 10
     @Column(name = "max_capacity")
-    private Integer maxCapacity;
+    private Integer maxCapacity=20;
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive;
