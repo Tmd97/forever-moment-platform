@@ -8,9 +8,25 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Static conversions between {@link Role} entities and their request and
+ * response DTOs.
+ *
+ * <p>
+ * Create and update behave differently on purpose: creation applies defaults
+ * for the optional flags, whereas update only overwrites fields the caller
+ * actually supplied and never changes the system-role flag.
+ */
 public class RoleBeanMapper {
 
-    // For CREATE operation - DTO to Entity
+    /**
+     * Builds a new role entity from a create request, defaulting permission level
+     * to {@code 10}, active to {@code true} and system role to {@code false} when
+     * they are not supplied.
+     *
+     * @param dto the role definition, may be {@code null}
+     * @return the new entity, or {@code null} if {@code dto} is {@code null}
+     */
     public static Role mapDtoToEntity(RoleRequestDto dto) {
         if (dto == null) {
             return null;
@@ -32,7 +48,15 @@ public class RoleBeanMapper {
         return role;
     }
 
-    // For UPDATE operation - Update existing entity from DTO
+    /**
+     * Applies an update request to an existing role. Name and description are always
+     * overwritten, while permission level and the active flag are only changed when
+     * present in the request. The system-role flag is intentionally never updated,
+     * as it is fixed at creation time.
+     *
+     * @param entity the role to mutate in place
+     * @param dto    source of the new values
+     */
     public static void updateEntity(Role entity, RoleRequestDto dto) {
         if (dto == null || entity == null) {
             return;
@@ -56,7 +80,13 @@ public class RoleBeanMapper {
         // System role flag should only be set at creation time
     }
 
-    // For READ operation - Entity to DTO (single)
+    /**
+     * Maps a role entity to its response DTO. The user count is left {@code null}
+     * because the {@link Role} entity holds no relationship to its users.
+     *
+     * @param entity the role entity, may be {@code null}
+     * @return the DTO, or {@code null} if {@code entity} is {@code null}
+     */
     public static RoleResponseDto mapEntityToDto(Role entity) {
         if (entity == null) {
             return null;
@@ -78,7 +108,12 @@ public class RoleBeanMapper {
         return dto;
     }
 
-    // For READ operation - List of Entities to List of DTOs
+    /**
+     * Maps a list of role entities to their response DTOs.
+     *
+     * @param entities the entities to convert, may be {@code null} or empty
+     * @return the mapped DTOs, or an empty list when there is nothing to map
+     */
     public static List<RoleResponseDto> toDtoList(List<Role> entities) {
         if (entities == null || entities.isEmpty()) {
             return Collections.emptyList();
@@ -89,7 +124,14 @@ public class RoleBeanMapper {
                 .collect(Collectors.toList());
     }
 
-    // Optional: For CREATE operation with specific permission level
+    /**
+     * Builds a role entity from a create request and then forces a specific
+     * permission level, overriding whatever the request carried.
+     *
+     * @param dto             the role definition, may be {@code null}
+     * @param permissionLevel permission level to apply; ignored when {@code null}
+     * @return the new entity, or {@code null} if {@code dto} is {@code null}
+     */
     public static Role mapDtoToEntityWithPermission(RoleRequestDto dto, Integer permissionLevel) {
         Role role = mapDtoToEntity(dto);
         if (role != null && permissionLevel != null) {
@@ -98,7 +140,14 @@ public class RoleBeanMapper {
         return role;
     }
 
-    // Optional: For copying properties from one entity to another
+    /**
+     * Copies the descriptive and flag fields from one role to another, leaving the
+     * target's identity ({@code id}) and creation timestamp untouched. Does nothing
+     * when either argument is {@code null}.
+     *
+     * @param source role to read from
+     * @param target role to write to
+     */
     public static void copyProperties(Role source, Role target) {
         if (source == null || target == null) {
             return;

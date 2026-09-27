@@ -30,6 +30,9 @@ public class AddonBeanMapper {
         dto.setName(addon.getName());
         dto.setDescription(addon.getDescription());
         dto.setIcon(addon.getIcon());
+        if (addon.getImageMedia() != null) {
+            dto.setMediaId(addon.getImageMedia().getId());
+        }
         dto.setBasePrice(addon.getBasePrice());
         dto.setEffectivePrice(addon.getBasePrice()); // no override at this level
         dto.setIsFree(false);
@@ -57,6 +60,9 @@ public class AddonBeanMapper {
         dto.setName(addon.getName());
         dto.setDescription(addon.getDescription());
         dto.setIcon(addon.getIcon());
+        if (addon.getImageMedia() != null) {
+            dto.setMediaId(addon.getImageMedia().getId());
+        }
         dto.setBasePrice(addon.getBasePrice());
         dto.setPriceOverride(mapper.getPriceOverride());
         dto.setEffectivePrice(mapper.effectivePrice()); // resolved: free→0, override→override, else base

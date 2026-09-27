@@ -8,8 +8,7 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 /**
  * Redis configuration for the Core service.
- * Uses plain {@link StringRedisTemplate} — values are stored as JSON strings
- * serialized/deserialized by {@link com.forvmom.core.services.OutboxCleanupService} using Jackson.
+ * Values are stored as JSON strings through {@link StringRedisTemplate}.
  */
 @Configuration
 public class RedisConfig {

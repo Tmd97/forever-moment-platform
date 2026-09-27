@@ -45,6 +45,11 @@ public class CatalogCacheService {
 
     // ── Experience ─────────────────────────────────────────────────────────────
 
+    /**
+     * Writes (or refreshes) the experience snapshot.
+     *
+     * @param exp experience to snapshot
+     */
     public void warmExperienceCache(Experience exp) {
         String key = "exp:" + exp.getId();
         ExperienceSnapshot snapshot = new ExperienceSnapshot(
@@ -53,16 +58,34 @@ public class CatalogCacheService {
         logger.debug("Warmed Redis key={}", key);
     }
 
+    /**
+     * Reads the cached experience snapshot.
+     *
+     * @param expId experience identifier
+     * @return the snapshot, or {@code null} on a cache miss or deserialization failure
+     */
     public ExperienceSnapshot getExperienceSnapshot(Long expId) {
         return getJson("exp:" + expId, ExperienceSnapshot.class);
     }
 
+    /**
+     * Removes the experience snapshot, forcing the next read to fall back to the
+     * database.
+     *
+     * @param expId experience identifier
+     */
     public void evictExperience(Long expId) {
         redis.delete("exp:" + expId);
     }
 
     // ── Location mapper ────────────────────────────────────────────────────────
 
+    /**
+     * Writes (or refreshes) the location-mapper snapshot, including its price
+     * override.
+     *
+     * @param elm experience-to-location mapping to snapshot
+     */
     public void warmLocationCache(ExperienceLocationMapper elm) {
         Long expId = elm.getExperience().getId();
         Long locId = elm.getLocation().getId();
@@ -73,16 +96,38 @@ public class CatalogCacheService {
         logger.debug("Warmed Redis key={}", key);
     }
 
+    /**
+     * Reads the cached location-mapper snapshot.
+     *
+     * @param expId      experience identifier
+     * @param locationId location identifier
+     * @return the snapshot, or {@code null} on a cache miss or deserialization failure
+     */
     public LocationSnapshot getLocationSnapshot(Long expId, Long locationId) {
         return getJson("exp:" + expId + ":loc:" + locationId, LocationSnapshot.class);
     }
 
+    /**
+     * Removes the location-mapper snapshot.
+     *
+     * @param expId      experience identifier
+     * @param locationId location identifier
+     */
     public void evictLocation(Long expId, Long locationId) {
         redis.delete("exp:" + expId + ":loc:" + locationId);
     }
 
     // ── Slot mapper ────────────────────────────────────────────────────────────
 
+    /**
+     * Writes (or refreshes) the time-slot mapper snapshot.
+     *
+     * <p>
+     * Times are stored as strings so the snapshot stays a plain JSON document,
+     * independent of the temporal types used by the entity model.
+     *
+     * @param esm experience time-slot mapping to snapshot
+     */
     public void warmSlotCache(ExperienceTimeSlotMapper esm) {
         String key = "slot:" + esm.getId();
         TimeSlot ts = esm.getTimeSlot();
@@ -100,16 +145,33 @@ public class CatalogCacheService {
         logger.debug("Warmed Redis key={}", key);
     }
 
+    /**
+     * Reads the cached time-slot mapper snapshot.
+     *
+     * @param slotMapperId time-slot mapper identifier
+     * @return the snapshot, or {@code null} on a cache miss or deserialization failure
+     */
     public SlotSnapshot getSlotSnapshot(Long slotMapperId) {
         return getJson("slot:" + slotMapperId, SlotSnapshot.class);
     }
 
+    /**
+     * Removes the time-slot mapper snapshot.
+     *
+     * @param slotMapperId time-slot mapper identifier
+     */
     public void evictSlot(Long slotMapperId) {
         redis.delete("slot:" + slotMapperId);
     }
 
     // ── Addon mapper ───────────────────────────────────────────────────────────
 
+    /**
+     * Writes (or refreshes) the add-on mapper snapshot, resolving its effective
+     * price.
+     *
+     * @param eam experience-to-add-on mapping to snapshot
+     */
     public void warmAddonCache(ExperienceAddonMapper eam) {
         String key = "addon:" + eam.getId();
         AddonSnapshot snapshot = new AddonSnapshot(
@@ -121,16 +183,36 @@ public class CatalogCacheService {
         logger.debug("Warmed Redis key={}", key);
     }
 
+    /**
+     * Reads the cached add-on mapper snapshot.
+     *
+     * @param addonMapperId add-on mapper identifier
+     * @return the snapshot, or {@code null} on a cache miss or deserialization failure
+     */
     public AddonSnapshot getAddonSnapshot(Long addonMapperId) {
         return getJson("addon:" + addonMapperId, AddonSnapshot.class);
     }
 
+    /**
+     * Removes the add-on mapper snapshot.
+     *
+     * @param addonMapperId add-on mapper identifier
+     */
     public void evictAddon(Long addonMapperId) {
         redis.delete("addon:" + addonMapperId);
     }
 
     // ── User ───────────────────────────────────────────────────────────────────
 
+    /**
+     * Writes (or refreshes) the user snapshot.
+     *
+     * <p>
+     * Held for a shorter TTL than catalog data so profile changes propagate into
+     * published events quickly.
+     *
+     * @param user user to snapshot
+     */
     public void warmUserCache(ApplicationUser user) {
         String key = "user:" + user.getId();
         UserSnapshot snapshot = new UserSnapshot(
@@ -139,6 +221,12 @@ public class CatalogCacheService {
         logger.debug("Warmed Redis key={}", key);
     }
 
+    /**
+     * Reads the cached user snapshot.
+     *
+     * @param userId user identifier
+     * @return the snapshot, or {@code null} on a cache miss or deserialization failure
+     */
     public UserSnapshot getUserSnapshot(Long userId) {
         return getJson("user:" + userId, UserSnapshot.class);
     }

@@ -4,15 +4,14 @@ import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
- * Transactional outbox record written atomically with the inventory update.
- * An async enrichment task reads this record post-commit, constructs the full
- * {@code BookingRequestedEvent}, publishes to Kafka, and marks it PUBLISHED.
- * A scheduled poller retries any record stuck in PENDING/FAILED state.
+ * Stores one stable booking event until Kafka accepts it.
  *
- * <p>
- * Table: {@code booking_outbox}
+ * <p>State flow: PENDING -> PROCESSING -> PUBLISHED. Failures move to FAILED
+ * and Quartz retries them. After the retry limit, the row becomes COMPENSATED
+ * or DEAD.
  */
 @Entity
 @Table(name = "booking_outbox", indexes = {
@@ -25,6 +24,8 @@ public class BookingOutbox {
     public static final String STATUS_PROCESSING = "PROCESSING";
     public static final String STATUS_PUBLISHED = "PUBLISHED";
     public static final String STATUS_FAILED = "FAILED";
+    public static final String STATUS_COMPENSATED = "COMPENSATED";
+    public static final String STATUS_DEAD = "DEAD";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -36,6 +37,24 @@ public class BookingOutbox {
     @Column(name = "booking_reference_id", nullable = false, unique = true, length = 60)
     private String bookingReferenceId;
 
+    @Column(name = "event_id", nullable = false, unique = true, length = 60)
+    private String eventId;
+
+    @Column(name = "event_producer", nullable = false, length = 60)
+    private String eventProducer;
+
+    @Column(name = "schema_version", nullable = false)
+    private Integer schemaVersion;
+
+    @Column(name = "occurred_at", nullable = false)
+    private Instant occurredAt;
+
+    @Column(name = "correlation_id", nullable = false, length = 100)
+    private String correlationId;
+
+    @Column(name = "causation_id", length = 100)
+    private String causationId;
+
     /**
      * Minimal JSON:
      * {@code {userId, slotMapperId, guestCount, addonMapperIds[], pincode}}
@@ -44,11 +63,11 @@ public class BookingOutbox {
     @Column(name = "payload", nullable = false, columnDefinition = "TEXT")
     private String payload;
 
-    /** PENDING → PUBLISHED on success, PENDING/FAILED → retried by poller */
+    /** Current lifecycle state controlled by conditional DAO transitions. */
     @Column(name = "status", nullable = false, length = 20)
     private String status = STATUS_PENDING;
 
-    /** How many enrichment attempts have been made (fast-path + poller together) */
+    /** Failed processing attempts. At five, maintenance compensates the booking. */
     @Column(name = "retry_count", nullable = false)
     private Integer retryCount = 0;
 
@@ -59,10 +78,20 @@ public class BookingOutbox {
     @Column(name = "published_at")
     private LocalDateTime publishedAt;
 
+    @Column(name = "processing_started_at")
+    private LocalDateTime processingStartedAt;
+
+    /**
+     * Identifies the current worker. Set in PROCESSING and cleared on every exit.
+     * An older worker cannot update the row after a new token is assigned.
+     */
+    @Column(name = "processing_owner_token", length = 36)
+    private String processingOwnerToken;
+
     @Column(name = "compensated_at")
     private LocalDateTime compensatedAt;
 
-    @Column(name = "failure_reason")
+    @Column(name = "failure_reason", length = 1000)
     private String failureReason;
 
     public BookingOutbox() {
@@ -84,6 +113,54 @@ public class BookingOutbox {
 
     public void setBookingReferenceId(String bookingReferenceId) {
         this.bookingReferenceId = bookingReferenceId;
+    }
+
+    public String getEventId() {
+        return eventId;
+    }
+
+    public void setEventId(String eventId) {
+        this.eventId = eventId;
+    }
+
+    public String getEventProducer() {
+        return eventProducer;
+    }
+
+    public void setEventProducer(String eventProducer) {
+        this.eventProducer = eventProducer;
+    }
+
+    public Integer getSchemaVersion() {
+        return schemaVersion;
+    }
+
+    public void setSchemaVersion(Integer schemaVersion) {
+        this.schemaVersion = schemaVersion;
+    }
+
+    public Instant getOccurredAt() {
+        return occurredAt;
+    }
+
+    public void setOccurredAt(Instant occurredAt) {
+        this.occurredAt = occurredAt;
+    }
+
+    public String getCorrelationId() {
+        return correlationId;
+    }
+
+    public void setCorrelationId(String correlationId) {
+        this.correlationId = correlationId;
+    }
+
+    public String getCausationId() {
+        return causationId;
+    }
+
+    public void setCausationId(String causationId) {
+        this.causationId = causationId;
     }
 
     public String getPayload() {
@@ -126,6 +203,22 @@ public class BookingOutbox {
         this.publishedAt = publishedAt;
     }
 
+    public LocalDateTime getProcessingStartedAt() {
+        return processingStartedAt;
+    }
+
+    public void setProcessingStartedAt(LocalDateTime processingStartedAt) {
+        this.processingStartedAt = processingStartedAt;
+    }
+
+    public String getProcessingOwnerToken() {
+        return processingOwnerToken;
+    }
+
+    public void setProcessingOwnerToken(String processingOwnerToken) {
+        this.processingOwnerToken = processingOwnerToken;
+    }
+
     public LocalDateTime getCompensatedAt() {
         return compensatedAt;
     }
@@ -140,22 +233,5 @@ public class BookingOutbox {
 
     public void setFailureReason(String failureReason) {
         this.failureReason = failureReason;
-    }
-
-
-    // ── Business helpers ───────────────────────────────────────────────────────
-
-    public void markPublished() {
-        this.status = STATUS_PUBLISHED;
-        this.publishedAt = LocalDateTime.now();
-    }
-
-    public void markFailed() {
-        this.status = STATUS_FAILED;
-        this.retryCount = this.retryCount + 1;
-    }
-
-    public void incrementRetry() {
-        this.retryCount = this.retryCount + 1;
     }
 }

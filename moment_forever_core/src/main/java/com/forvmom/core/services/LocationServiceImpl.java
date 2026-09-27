@@ -15,6 +15,24 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * JPA-backed implementation of {@link LocationService}.
+ *
+ * <p>
+ * Every operation is transactional; queries use {@code readOnly = true}. Read
+ * paths return an empty list when nothing matches, except {@code getByCity},
+ * which raises {@link ResourceNotFoundException} instead.
+ *
+ * <p>
+ * Experience attachments are cache-coupled: {@code attachToExperience},
+ * {@code updateExperienceAttachment} and {@code toggleExperienceAttachmentActive}
+ * call {@code CatalogCacheService#warmLocationCache} inline, and
+ * {@code detachFromExperience} calls {@code CatalogCacheService#evictLocation}.
+ * This is done synchronously inside the write transaction so the asynchronous
+ * booking enrichment path always reads a fresh Redis snapshot. The
+ * category-location and sub-category-location attachments are not part of that
+ * snapshot and therefore do not touch the cache.
+ */
 @Service
 public class LocationServiceImpl implements LocationService {
 
@@ -45,6 +63,16 @@ public class LocationServiceImpl implements LocationService {
     @Autowired
     private SubCategoryLocationMapperDao subCategoryLocationMapperDao;
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Rejects duplicates by name before persisting.
+     *
+     * @param requestDto the location attributes
+     * @return the created location
+     * @throws IllegalArgumentException if a location with the same name exists
+     */
     @Override
     @Transactional
     public LocationResponseDto createLocation(LocationRequestDto requestDto) {
@@ -58,6 +86,20 @@ public class LocationServiceImpl implements LocationService {
         return LocationBeanMapper.mapEntityToDto(saved);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * The uniqueness check is only performed when the name actually changes, so
+     * re-saving a location under its own name is allowed.
+     *
+     * @param id         the location identifier
+     * @param requestDto the new location attributes
+     * @return the updated location
+     * @throws ResourceNotFoundException if no location exists with the given id
+     * @throws IllegalArgumentException  if the new name is taken by another
+     *                                   location
+     */
     @Override
     @Transactional
     public LocationResponseDto updateLocation(Long id, LocationRequestDto requestDto) {
@@ -75,6 +117,16 @@ public class LocationServiceImpl implements LocationService {
         return LocationBeanMapper.mapEntityToDto(updated);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Uses the fetch-joined query so the pincodes are loaded with the location.
+     *
+     * @param id the location identifier
+     * @return the location with its pincodes
+     * @throws ResourceNotFoundException if no location exists with the given id
+     */
     @Override
     @Transactional(readOnly = true)
     public LocationResponseDto getById(Long id) {
@@ -85,6 +137,11 @@ public class LocationServiceImpl implements LocationService {
         return LocationBeanMapper.mapEntityToDto(location);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @return all locations, or an empty list when none exist
+     */
     @Override
     @Transactional(readOnly = true)
     public List<LocationResponseDto> getAll() {
@@ -94,6 +151,11 @@ public class LocationServiceImpl implements LocationService {
         return locations.stream().map(LocationBeanMapper::mapEntityToDto).collect(Collectors.toList());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @return the active locations, or an empty list when none exist
+     */
     @Override
     @Transactional(readOnly = true)
     public List<LocationResponseDto> getAllActive() {
@@ -103,6 +165,16 @@ public class LocationServiceImpl implements LocationService {
         return locations.stream().map(LocationBeanMapper::mapEntityToDto).collect(Collectors.toList());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Unlike the other list methods, an empty result is treated as an error here.
+     *
+     * @param city the city name to filter on
+     * @return the locations in that city
+     * @throws ResourceNotFoundException if the city has no locations
+     */
     @Override
     @Transactional(readOnly = true)
     public List<LocationResponseDto> getByCity(String city) {
@@ -113,6 +185,13 @@ public class LocationServiceImpl implements LocationService {
         return locations.stream().map(LocationBeanMapper::mapEntityToDto).collect(Collectors.toList());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param id the location identifier
+     * @return {@code true} once the delete has been issued
+     * @throws ResourceNotFoundException if no location exists with the given id
+     */
     @Override
     @Transactional
     public boolean deleteLocation(Long id) {
@@ -124,6 +203,12 @@ public class LocationServiceImpl implements LocationService {
         return true;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param id the location identifier
+     * @throws ResourceNotFoundException if no location exists with the given id
+     */
     @Override
     @Transactional
     public void toggleActive(Long id) {
@@ -137,6 +222,19 @@ public class LocationServiceImpl implements LocationService {
 
     // ─── Pincode operations ───────────────────────────────────────────────────
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * The pincode code only has to be unique within its own location, so the same
+     * code may be registered against different locations.
+     *
+     * @param requestDto the pincode attributes, including the owning location id
+     * @return the created pincode
+     * @throws ResourceNotFoundException if the referenced location does not exist
+     * @throws IllegalArgumentException  if the code is already registered for that
+     *                                   location
+     */
     @Override
     @Transactional
     public PincodeResponseDto addPincode(PincodeRequestDto requestDto) {
@@ -164,6 +262,20 @@ public class LocationServiceImpl implements LocationService {
         return LocationBeanMapper.mapPincodeToDto(saved, true);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * The pincode is loaded together with its location so the uniqueness check can
+     * be scoped to that location. The location itself cannot be reassigned here.
+     *
+     * @param pincodeId  the pincode identifier
+     * @param requestDto the new pincode attributes
+     * @return the updated pincode
+     * @throws ResourceNotFoundException if no pincode exists with the given id
+     * @throws IllegalArgumentException  if the new code is already used within the
+     *                                   same location
+     */
     @Override
     @Transactional
     public PincodeResponseDto updatePincode(Long pincodeId, PincodeRequestDto requestDto) {
@@ -192,6 +304,13 @@ public class LocationServiceImpl implements LocationService {
         return LocationBeanMapper.mapPincodeToDto(updated, true);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param locationId the location identifier
+     * @return the pincodes of that location, or an empty list when none exist
+     * @throws ResourceNotFoundException if no location exists with the given id
+     */
     @Override
     @Transactional(readOnly = true)
     public List<PincodeResponseDto> getPincodesByLocation(Long locationId) {
@@ -205,6 +324,16 @@ public class LocationServiceImpl implements LocationService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * An unknown code is reported as "not serviceable".
+     *
+     * @param pincodeCode the pincode code entered by the customer
+     * @return the matching pincode together with its location
+     * @throws ResourceNotFoundException if the code is not registered
+     */
     @Override
     @Transactional(readOnly = true)
     public PincodeResponseDto checkPincode(String pincodeCode) {
@@ -215,6 +344,13 @@ public class LocationServiceImpl implements LocationService {
         return LocationBeanMapper.mapPincodeToDto(pincode, true);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param pincodeId the pincode identifier
+     * @return {@code true} once the delete has been issued
+     * @throws ResourceNotFoundException if no pincode exists with the given id
+     */
     @Override
     @Transactional
     public boolean deletePincode(Long pincodeId) {
@@ -228,6 +364,22 @@ public class LocationServiceImpl implements LocationService {
 
     // ── Experience Association ────────────────────────────────────────────────
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Creates the junction row, wires it to the experience through the
+     * bidirectional helper, and then warms the Redis location snapshot inline so
+     * the asynchronous booking enrichment path sees the new mapping immediately.
+     *
+     * @param locationId   the location identifier
+     * @param experienceId the experience identifier
+     * @param requestDto   price override, validity window and active flag; the
+     *                     active flag defaults to {@code true} when absent
+     * @return the created experience-location mapping
+     * @throws IllegalStateException     if the pair is already attached
+     * @throws ResourceNotFoundException if the location or experience is unknown
+     */
     @Override
     @Transactional
     public ExperienceLocationResponseDto attachToExperience(Long locationId, Long experienceId,
@@ -262,6 +414,18 @@ public class LocationServiceImpl implements LocationService {
         return ExperienceBeanMapper.mapLocationMapperToDto(savedMapper);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * The cache entry is evicted right after the junction row is removed, so a
+     * stale snapshot cannot be served for an experience-location pair that no
+     * longer exists.
+     *
+     * @param locationId   the location identifier
+     * @param experienceId the experience identifier
+     * @throws ResourceNotFoundException if the pair is not attached
+     */
     @Override
     @Transactional
     public void detachFromExperience(Long locationId, Long experienceId) {
@@ -274,6 +438,12 @@ public class LocationServiceImpl implements LocationService {
         catalogCacheService.evictLocation(experienceId, locationId);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param locationId the location identifier
+     * @return the experience mappings for that location, or an empty list
+     */
     @Override
     @Transactional(readOnly = true)
     public List<ExperienceLocationResponseDto> getExperiencesForLocation(Long locationId) {
@@ -286,6 +456,20 @@ public class LocationServiceImpl implements LocationService {
         return ExperienceBeanMapper.mapLocationMappers(new ArrayList<>(mappers));
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Price override and validity window are always overwritten with the request
+     * values, while the active flag is only changed when supplied. The refreshed
+     * mapping is written back into the Redis snapshot inline.
+     *
+     * @param locationId   the location identifier
+     * @param experienceId the experience identifier
+     * @param requestDto   the new price override, validity window and active flag
+     * @return the updated mapping
+     * @throws ResourceNotFoundException if the pair is not attached
+     */
     @Override
     @Transactional
     public ExperienceLocationResponseDto updateExperienceAttachment(Long locationId, Long experienceId,
@@ -307,6 +491,16 @@ public class LocationServiceImpl implements LocationService {
         return ExperienceBeanMapper.mapLocationMapperToDto(updated);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * A {@code null} active flag is treated as inactive, so toggling turns it on.
+     * The snapshot is re-warmed with the new state.
+     *
+     * @param mapperId the experience-location mapping identifier
+     * @throws ResourceNotFoundException if no such mapping exists
+     */
     @Override
     @Transactional
     public void toggleExperienceAttachmentActive(Long mapperId) {
@@ -318,6 +512,21 @@ public class LocationServiceImpl implements LocationService {
         catalogCacheService.warmLocationCache(updated);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Display order defaults to {@code 0} and the active flag to {@code true} when
+     * the request leaves them unset.
+     *
+     * @param locationId the location identifier
+     * @param categoryId the category identifier
+     * @param requestDto display order and active flag for the mapping
+     * @return the created category-location mapping
+     * @throws IllegalStateException     if the category is already attached to the
+     *                                   location
+     * @throws ResourceNotFoundException if the location or category is unknown
+     */
     @Override
     @Transactional
     public CategoryLocationResponseDto attachCategoryToLocation(Long locationId, Long categoryId,
@@ -342,6 +551,14 @@ public class LocationServiceImpl implements LocationService {
         return LocationBeanMapper.mapCategoryLocationToDto(saved);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param locationId the location identifier
+     * @param categoryId the category identifier
+     * @throws ResourceNotFoundException if the category is not attached to the
+     *                                   location
+     */
     @Override
     @Transactional
     public void detachCategoryFromLocation(Long locationId, Long categoryId) {
@@ -352,6 +569,12 @@ public class LocationServiceImpl implements LocationService {
         categoryLocationMapperDao.delete(mapper);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param locationId the location identifier
+     * @return the category mappings for that location, or an empty list
+     */
     @Override
     @Transactional(readOnly = true)
     public List<CategoryLocationResponseDto> getCategoriesForLocation(Long locationId) {
@@ -359,6 +582,20 @@ public class LocationServiceImpl implements LocationService {
         return mappers.stream().map(LocationBeanMapper::mapCategoryLocationToDto).collect(Collectors.toList());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Only the fields present in the request are applied, so a partial payload
+     * leaves the remaining mapping attributes untouched.
+     *
+     * @param locationId the location identifier
+     * @param categoryId the category identifier
+     * @param requestDto the fields to update
+     * @return the updated mapping
+     * @throws ResourceNotFoundException if the category is not attached to the
+     *                                   location
+     */
     @Override
     @Transactional
     public CategoryLocationResponseDto updateCategoryAttachment(Long locationId, Long categoryId,
@@ -377,6 +614,15 @@ public class LocationServiceImpl implements LocationService {
         return LocationBeanMapper.mapCategoryLocationToDto(updated);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * A {@code null} active flag is treated as inactive, so toggling turns it on.
+     *
+     * @param mapperId the category-location mapping identifier
+     * @throws ResourceNotFoundException if no such mapping exists
+     */
     @Override
     @Transactional
     public void toggleCategoryAttachmentActive(Long mapperId) {
@@ -386,6 +632,16 @@ public class LocationServiceImpl implements LocationService {
         categoryLocationMapperDao.update(mapper);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Projects each active mapping into a flat DTO of category id, name, slug and
+     * the mapping's display order.
+     *
+     * @param locationId the location identifier
+     * @return the active categories for that location, or an empty list
+     */
     @Override
     @Transactional(readOnly = true)
     public List<CategoryByLocationDto> getActiveCategoriesByLocation(Long locationId) {
@@ -399,6 +655,21 @@ public class LocationServiceImpl implements LocationService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Display order defaults to {@code 0} and the active flag to {@code true} when
+     * the request leaves them unset.
+     *
+     * @param locationId    the location identifier
+     * @param subCategoryId the sub-category identifier
+     * @param requestDto    display order and active flag for the mapping
+     * @return the created sub-category-location mapping
+     * @throws IllegalStateException     if the sub-category is already attached to
+     *                                   the location
+     * @throws ResourceNotFoundException if the location or sub-category is unknown
+     */
     @Override
     @Transactional
     public SubCategoryLocationResponseDto attachSubCategoryToLocation(Long locationId, Long subCategoryId,
@@ -423,6 +694,14 @@ public class LocationServiceImpl implements LocationService {
         return LocationBeanMapper.mapSubCategoryLocationToDto(saved);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param locationId    the location identifier
+     * @param subCategoryId the sub-category identifier
+     * @throws ResourceNotFoundException if the sub-category is not attached to the
+     *                                   location
+     */
     @Override
     @Transactional
     public void detachSubCategoryFromLocation(Long locationId, Long subCategoryId) {
@@ -433,6 +712,12 @@ public class LocationServiceImpl implements LocationService {
         subCategoryLocationMapperDao.delete(mapper);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param locationId the location identifier
+     * @return the sub-category mappings for that location, or an empty list
+     */
     @Override
     @Transactional(readOnly = true)
     public List<SubCategoryLocationResponseDto> getSubCategoriesForLocation(Long locationId) {
@@ -440,6 +725,19 @@ public class LocationServiceImpl implements LocationService {
         return mappers.stream().map(LocationBeanMapper::mapSubCategoryLocationToDto).collect(Collectors.toList());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Only the fields present in the request are applied.
+     *
+     * @param locationId    the location identifier
+     * @param subCategoryId the sub-category identifier
+     * @param requestDto    the fields to update
+     * @return the updated mapping
+     * @throws ResourceNotFoundException if the sub-category is not attached to the
+     *                                   location
+     */
     @Override
     @Transactional
     public SubCategoryLocationResponseDto updateSubCategoryAttachment(Long locationId, Long subCategoryId,
@@ -458,6 +756,15 @@ public class LocationServiceImpl implements LocationService {
         return LocationBeanMapper.mapSubCategoryLocationToDto(updated);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * A {@code null} active flag is treated as inactive, so toggling turns it on.
+     *
+     * @param mapperId the sub-category-location mapping identifier
+     * @throws ResourceNotFoundException if no such mapping exists
+     */
     @Override
     @Transactional
     public void toggleSubCategoryAttachmentActive(Long mapperId) {
@@ -467,6 +774,17 @@ public class LocationServiceImpl implements LocationService {
         subCategoryLocationMapperDao.update(mapper);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Projects each active mapping into a flat DTO carrying the sub-category id,
+     * name and slug, its parent category id and name, and the mapping's display
+     * order.
+     *
+     * @param locationId the location identifier
+     * @return the active sub-categories for that location, or an empty list
+     */
     @Override
     @Transactional(readOnly = true)
     public List<SubCategoryByLocationDto> getActiveSubCategoriesByLocation(Long locationId) {
@@ -482,6 +800,17 @@ public class LocationServiceImpl implements LocationService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Same projection as {@link #getActiveSubCategoriesByLocation(Long)} but
+     * restricted to a single parent category by the DAO query.
+     *
+     * @param locationId the location identifier
+     * @param categoryId the parent category identifier
+     * @return the matching active sub-categories, or an empty list
+     */
     @Override
     @Transactional(readOnly = true)
     public List<SubCategoryByLocationDto> getActiveSubCategoriesByLocationAndCategory(Long locationId, Long categoryId) {

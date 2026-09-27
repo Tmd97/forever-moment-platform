@@ -18,6 +18,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.CacheControl;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -27,6 +28,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -123,7 +125,19 @@ public class ImageControllerAdmin {
 
     @GetMapping("/fetch/{storageFileName}")
     @Operation(summary = "Fetch Image by storageFileName", description = "Looks up the GridFS filePath from the Media SQL record and streams the file based on cache busted storageFileName")
-    public ResponseEntity<Resource> downloadImageWithCacheBust(@PathVariable String storageFileName) throws IOException {
+    public ResponseEntity<Resource> downloadImageWithCacheBust(
+            @PathVariable String storageFileName,
+            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch) throws IOException {
+        String eTag = "\"" + storageFileName + "\"";
+        CacheControl cacheControl = CacheControl.maxAge(365, TimeUnit.DAYS)
+                .cachePublic()
+                .immutable();
+        if (eTag.equals(ifNoneMatch)) {
+            return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
+                    .eTag(eTag)
+                    .cacheControl(cacheControl)
+                    .build();
+        }
         String gridFsId = mediaService.getMediaByStorageFileName(storageFileName);
         Resource resource = imageService.downloadImage(gridFsId);
         String contentType = imageService.getContentType(gridFsId)
@@ -131,6 +145,8 @@ public class ImageControllerAdmin {
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "inline; filename=\"" + resource.getFilename() + "\"")
+                .cacheControl(cacheControl)
+                .eTag(eTag)
                 .contentType(MediaType.parseMediaType(contentType))
                 .contentLength(resource.contentLength())
                 .body(resource);

@@ -5,7 +5,7 @@ import java.time.LocalDate;
 
 /**
  * Response DTO for an ExperienceTimeSlotMapper record.
- * Combines TimeSlot master data with per-location pricing and availability.
+ * Combines TimeSlot master data with per-location configuration and pricing.
  */
 public class ExperienceTimeSlotResponseDto {
 
@@ -22,8 +22,6 @@ public class ExperienceTimeSlotResponseDto {
     // Per-location-experience overrides (Level 3 pricing)
     private BigDecimal priceOverride;
     private Integer maxCapacity;
-    private Integer currentBookings;
-    private Integer availableCapacity;
 
     private LocalDate validFrom;
     private LocalDate validTo;
@@ -78,22 +76,6 @@ public class ExperienceTimeSlotResponseDto {
 
     public void setMaxCapacity(Integer maxCapacity) {
         this.maxCapacity = maxCapacity;
-    }
-
-    public Integer getCurrentBookings() {
-        return currentBookings;
-    }
-
-    public void setCurrentBookings(Integer currentBookings) {
-        this.currentBookings = currentBookings;
-    }
-
-    public Integer getAvailableCapacity() {
-        return availableCapacity;
-    }
-
-    public void setAvailableCapacity(Integer availableCapacity) {
-        this.availableCapacity = availableCapacity;
     }
 
     public LocalDate getValidFrom() {

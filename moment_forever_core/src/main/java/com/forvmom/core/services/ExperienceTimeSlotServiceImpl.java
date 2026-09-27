@@ -22,6 +22,26 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * JPA-backed implementation of {@link ExperienceTimeSlotService}.
+ *
+ * <p>
+ * The service covers two concerns. First, CRUD over the master
+ * {@link TimeSlot} catalog, where a slot is considered a duplicate when both its
+ * label and its start/end times match an existing row. Second, the attachment of
+ * those master slots to a specific experience-and-location pair through an
+ * {@link ExperienceTimeSlotMapper} that hangs off the
+ * {@link ExperienceLocationMapper} junction, which is what actually carries slot
+ * capacity for bookings.
+ *
+ * <p>
+ * Attachment writes call {@code CatalogCacheService} inline:
+ * {@code attachTimeSlot}, {@code updateAttachment} and
+ * {@code toggleAttachmentActive} warm the Redis slot snapshot, while
+ * {@code detachTimeSlot} evicts it, so the asynchronous booking enrichment path
+ * always resolves slots against fresh data. Master time-slot CRUD does not touch
+ * the cache, since the snapshots are keyed by the attachment rows.
+ */
 @Service
 public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService {
 
@@ -45,6 +65,18 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
 
     // ── Master TimeSlot CRUD ──────────────────────────────────────────────────
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Uniqueness is defined by the combination of label plus start and end time,
+     * so the same label may be reused for a different time range.
+     *
+     * @param requestDto the slot label and its start/end times as strings
+     * @return the created master time slot
+     * @throws IllegalArgumentException if an identical label and time range
+     *                                  already exists
+     */
     @Override
     @Transactional
     public TimeSlotResponseDto createTimeSlot(TimeSlotRequestDto requestDto) {
@@ -59,6 +91,11 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
         return TimeSlotBeanMapper.mapEntityToDto(timeSlotDao.save(entity));
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @return all master time slots, or an empty list when none exist
+     */
     @Override
     @Transactional(readOnly = true)
     public List<TimeSlotResponseDto> getAllTimeSlots() {
@@ -67,12 +104,28 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
                 .collect(Collectors.toList());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param id the master time slot identifier
+     * @return the matching time slot
+     * @throws ResourceNotFoundException if no time slot exists with the given id
+     */
     @Override
     @Transactional(readOnly = true)
     public TimeSlotResponseDto getTimeSlotById(Long id) {
         return TimeSlotBeanMapper.mapEntityToDto(findTimeSlotOrThrow(id));
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Matches on a label substring rather than an exact label.
+     *
+     * @param label the label fragment to search for
+     * @return the matching time slots, or an empty list
+     */
     @Override
     @Transactional(readOnly = true)
     public List<TimeSlotResponseDto> getTimeSlotsByLabel(String label) {
@@ -81,6 +134,16 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
                 .collect(Collectors.toList());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * The string bounds are parsed into times before the DAO query is issued.
+     *
+     * @param startTime the range start as a parsable time string
+     * @param endTime   the range end as a parsable time string
+     * @return the matching time slots, or an empty list
+     */
     @Override
     @Transactional(readOnly = true)
     public List<TimeSlotResponseDto> getTimeSlotsByTimeRange(String startTime, String endTime) {
@@ -90,6 +153,20 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
                 .collect(Collectors.toList());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * A duplicate hit that resolves to the slot being edited is ignored, so a slot
+     * can be saved without changing its label or times.
+     *
+     * @param id         the master time slot identifier
+     * @param requestDto the new label and times
+     * @return the updated time slot
+     * @throws ResourceNotFoundException if no time slot exists with the given id
+     * @throws IllegalArgumentException  if another slot already uses the same label
+     *                                   and time range
+     */
     @Override
     @Transactional
     public TimeSlotResponseDto updateTimeSlot(Long id, TimeSlotRequestDto requestDto) {
@@ -107,6 +184,12 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
         return TimeSlotBeanMapper.mapEntityToDto(timeSlotDao.update(entity));
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param id the master time slot identifier
+     * @throws ResourceNotFoundException if no time slot exists with the given id
+     */
     @Override
     @Transactional
     public void deleteTimeSlot(Long id) {
@@ -114,6 +197,15 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
         timeSlotDao.delete(entity);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * A {@code null} active flag is treated as inactive, so toggling turns it on.
+     *
+     * @param id the master time slot identifier
+     * @throws ResourceNotFoundException if no time slot exists with the given id
+     */
     @Override
     @Transactional
     public void toggleTimeSlotActive(Long id) {
@@ -124,6 +216,25 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
 
     // ── Experience-Location Attachment ────────────────────────────────────────
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Resolves (or lazily creates) the experience-location junction row, then
+     * attaches the master slot to it and warms the Redis slot snapshot inline so
+     * the asynchronous booking enrichment path can price and validate the slot
+     * immediately.
+     *
+     * @param experienceId the experience identifier
+     * @param locationId   the location identifier
+     * @param timeSlotId   the master time slot identifier
+     * @param requestDto   attachment attributes such as capacity and active flag
+     * @return the created experience-time-slot mapping
+     * @throws ResourceNotFoundException if the experience, location or time slot
+     *                                   does not exist
+     * @throws IllegalStateException     if the slot is already attached to this
+     *                                   experience-location pair
+     */
     @Override
     @Transactional
     public ExperienceTimeSlotResponseDto attachTimeSlot(Long experienceId, Long locationId, Long timeSlotId,
@@ -160,6 +271,21 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
         return TimeSlotBeanMapper.mapMapperEntityToDto(savedMapper);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Attaches each requested slot through {@link #attachTimeSlot}, collecting
+     * failures instead of aborting: an already attached slot is reported as
+     * {@code DUPLICATE} and a missing slot or experience-location as
+     * {@code NOT_FOUND}. Since everything runs in one transaction, the skipped
+     * items are simply omitted from the attached list.
+     *
+     * @param experienceId the experience identifier
+     * @param locationId   the location identifier
+     * @param requestDto   the batch of slots to attach
+     * @return the attached mappings together with the skipped items and reasons
+     */
     @Override
     @Transactional
     public BulkAttachTimeSlotsResultDto attachTimeSlots(Long experienceId, Long locationId,
@@ -184,6 +310,20 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
         return new BulkAttachTimeSlotsResultDto(attached, skipped);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * The mapping id is captured before the delete so the cache entry can still be
+     * evicted afterwards.
+     *
+     * @param experienceId the experience identifier
+     * @param locationId   the location identifier
+     * @param timeSlotId   the master time slot identifier
+     * @throws ResourceNotFoundException if the location is not attached to the
+     *                                   experience, or the slot is not attached to
+     *                                   that pair
+     */
     @Override
     @Transactional
     public void detachTimeSlot(Long experienceId, Long locationId, Long timeSlotId) {
@@ -200,6 +340,15 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
         catalogCacheService.evictSlot(mapperId);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param experienceId the experience identifier
+     * @param locationId   the location identifier
+     * @return the slot mappings of that experience-location pair
+     * @throws ResourceNotFoundException if the location is not attached to the
+     *                                   experience
+     */
     @Override
     @Transactional(readOnly = true)
     public List<ExperienceTimeSlotResponseDto> getTimeSlotsForExperienceLocation(
@@ -209,6 +358,22 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
                 timeSlotMapperDao.findByExperienceLocationId(expLocation.getId()));
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Applies the request to the existing mapping and re-warms the Redis slot
+     * snapshot with the updated values.
+     *
+     * @param experienceId the experience identifier
+     * @param locationId   the location identifier
+     * @param timeSlotId   the master time slot identifier
+     * @param requestDto   the attachment attributes to apply
+     * @return the updated mapping
+     * @throws ResourceNotFoundException if the location is not attached to the
+     *                                   experience, or the slot is not attached to
+     *                                   that pair
+     */
     @Override
     @Transactional
     public ExperienceTimeSlotResponseDto updateAttachment(Long experienceId, Long locationId, Long timeSlotId,
@@ -227,6 +392,16 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
         return TimeSlotBeanMapper.mapMapperEntityToDto(updated);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * A {@code null} active flag is treated as inactive, so toggling turns it on.
+     * The slot snapshot is re-warmed with the new state.
+     *
+     * @param mapperId the experience-time-slot mapping identifier
+     * @throws ResourceNotFoundException if no such mapping exists
+     */
     @Override
     @Transactional
     public void toggleAttachmentActive(Long mapperId) {

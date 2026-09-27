@@ -1,8 +1,7 @@
 package com.forvmom.core.services;
 
-import com.forvmom.common.dto.response.MediaResponseDto;
 import com.forvmom.common.utils.FileExtension;
-import com.forvmom.core.mapper.MediaBeanMapper;
+import com.forvmom.data.entities.MediaVariantType;
 import com.forvmom.store.api.ObjectStorageService;
 import com.forvmom.store.dto.ImageMetadataResponse;
 import com.forvmom.store.dto.ImageResponse;
@@ -15,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -24,6 +24,9 @@ public class ImageService {
 
     @Autowired
     private MediaService mediaService;
+
+    @Autowired
+    private ImageVariantService imageVariantService;
 
     private final ObjectStorageService storageService;
 
@@ -43,25 +46,29 @@ public class ImageService {
                 finalMetadata.putAll(metadata);
             }
 
-            // Store the file
+            String originalName = file.getOriginalFilename();
+            String originalStorageFileName = FileExtension.generateTimestampName(originalName);
+            byte[] sourceBytes = file.getBytes();
+
+            // Store the file 
             String id = storageService.store(
-                    file.getOriginalFilename(),
-                    file.getInputStream(),
+                    originalStorageFileName,
+                    new ByteArrayInputStream(sourceBytes),
                     file.getContentType(),
                     finalMetadata
             );
 
-            String originalName = file.getOriginalFilename();
-
-            String newFileName = FileExtension.generateTimestampName(originalName);
             // Save metadata to SQL database (use unique name with timestamp help in bust cache)
             ImageResponse mediaResponse = mediaService.saveMediaMetadata(
-                    file.getOriginalFilename(),
-                    newFileName,
+                    originalName,
+                    originalStorageFileName,
                     id,
                     file.getContentType(),
-                    file.getSize()
+                    sourceBytes.length
             );
+
+            saveVariants(mediaResponse, originalStorageFileName, id, file.getContentType(), sourceBytes, finalMetadata);
+            mediaService.hydrateVariantUrls(mediaResponse);
             return mediaResponse;
 
         } catch (IOException e) {
@@ -134,5 +141,70 @@ public class ImageService {
         response.setUploadDate(metadata.getUploadDate());
         response.setUserMetadata(metadata.getUserMetadata());
         return response;
+    }
+
+    private void saveVariants(ImageResponse mediaResponse,
+            String originalStorageFileName,
+            String originalPath,
+            String originalContentType,
+            byte[] sourceBytes,
+            Map<String, Object> metadata) throws IOException {
+        Long mediaId = mediaResponse.getId();
+
+        imageVariantService.saveOrUpdateVariant(mediaId, new ImageVariantService.VariantPayload(
+                MediaVariantType.ORIGINAL,
+                originalStorageFileName,
+                originalPath,
+                originalContentType,
+                sourceBytes.length,
+                null,
+                null));
+
+        if (originalContentType == null || !originalContentType.startsWith("image/")) {
+            return;
+        }
+
+        var decoded = ImageVariantProcessor.decode(sourceBytes);
+        if (decoded == null) {
+            return;
+        }
+
+        String extension = FileExtension.getExtensionWithoutDot(originalStorageFileName);
+        ImageVariantProcessor.RenderedVariant hero = ImageVariantProcessor.resize(decoded, 1280, extension);
+        String heroStorageName = variantStorageName(originalStorageFileName, "hero", hero.getFormat());
+        String heroPath = storageService.store(heroStorageName,
+                new ByteArrayInputStream(hero.getBytes()),
+                hero.getMimeType(),
+                metadata);
+                
+        imageVariantService.saveOrUpdateVariant(mediaId, new ImageVariantService.VariantPayload(
+                MediaVariantType.HERO,
+                heroStorageName,
+                heroPath,
+                hero.getMimeType(),
+                hero.getBytes().length,
+                hero.getWidth(),
+                hero.getHeight()));
+
+        ImageVariantProcessor.RenderedVariant thumb = ImageVariantProcessor.resize(decoded, 320, extension);
+        String thumbStorageName = variantStorageName(originalStorageFileName, "thumb", thumb.getFormat());
+        String thumbPath = storageService.store(thumbStorageName,
+                new ByteArrayInputStream(thumb.getBytes()),
+                thumb.getMimeType(),
+                metadata);
+        imageVariantService.saveOrUpdateVariant(mediaId, new ImageVariantService.VariantPayload(
+                MediaVariantType.THUMB,
+                thumbStorageName,
+                thumbPath,
+                thumb.getMimeType(),
+                thumb.getBytes().length,
+                thumb.getWidth(),
+                thumb.getHeight()));
+    }
+
+    private String variantStorageName(String originalStorageFileName, String variantLabel, String outputFormat) {
+        String baseName = FileExtension.getNameWithoutExtension(originalStorageFileName);
+        String extension = "." + outputFormat.toLowerCase();
+        return baseName + "_" + variantLabel + "_" + System.currentTimeMillis() + extension;
     }
 }

@@ -4,10 +4,16 @@ import com.forvmom.common.dto.request.MediaRequestDto;
 import com.forvmom.common.errorhandler.ResourceNotFoundException;
 import com.forvmom.core.config.ImageUrlConfig;
 import com.forvmom.core.mapper.MediaBeanMapper;
+import com.forvmom.data.dao.ExperienceMediaMapperDao;
 import com.forvmom.data.dao.MediaDao;
+import com.forvmom.data.dao.MediaVariantDao;
+import com.forvmom.data.dao.PromotionAssetDao;
 import com.forvmom.data.entities.Media;
+import com.forvmom.data.entities.MediaVariant;
 import com.forvmom.store.api.ObjectStorageService;
 import com.forvmom.store.dto.ImageResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +23,7 @@ import java.util.stream.Collectors;
 
 @Service
 public class MediaService {
+    private static final Logger logger = LoggerFactory.getLogger(MediaService.class);
 
     @Autowired
     private MediaDao mediaDao;
@@ -26,6 +33,21 @@ public class MediaService {
 
     @Autowired
     private ObjectStorageService storageService;
+
+    @Autowired
+    private ImageFlowCacheService imageFlowCacheService;
+
+    @Autowired
+    private ExperienceMediaMapperDao experienceMediaMapperDao;
+
+    @Autowired
+    private ImageVariantService imageVariantService;
+
+    @Autowired
+    private MediaVariantDao mediaVariantDao;
+
+    @Autowired
+    private PromotionAssetDao promotionAssetDao;
 
     /**
      * Save media metadata to SQL database after file is uploaded to storage.
@@ -53,27 +75,46 @@ public class MediaService {
         }
 
         Media savedMedia = mediaDao.save(media);
+        imageFlowCacheService.putResolvedFilePath(storageFileName, filePath);
         return MediaBeanMapper.mapEntityToDto(savedMedia, imageUrlConfig);
     }
 
     @Transactional(readOnly = true)
     public ImageResponse getMediaById(Long id) {
-        return MediaBeanMapper.mapEntityToDto(findMediaById(id), imageUrlConfig);
+        ImageResponse dto = MediaBeanMapper.mapEntityToDto(findMediaById(id), imageUrlConfig);
+        hydrateVariantUrls(dto);
+        return dto;
     }
 
     @Transactional(readOnly = true)
     public String getMediaByStorageFileName(String storageFileName) {
-        try {
-            return mediaDao.findGridFsIdByStorageFileName(storageFileName);
-        } catch (Exception e) {
+        String cachedPath = imageFlowCacheService.getResolvedFilePath(storageFileName);
+        if (cachedPath != null) {
+            logger.info("Cache hit: image resolve key img:resolve:{}", storageFileName);
+            return cachedPath;
+        }
+        logger.info("Cache miss: image resolve key img:resolve:{}; loading from DB", storageFileName);
+
+        String filePath = mediaDao.findGridFsIdByStorageFileName(storageFileName);
+        if (filePath == null) {
+            filePath = mediaVariantDao.findFilePathByStorageFileName(storageFileName);
+        }
+        if (filePath == null) {
             throw new ResourceNotFoundException("Media not found with storage file name: " + storageFileName);
         }
+
+        imageFlowCacheService.putResolvedFilePath(storageFileName, filePath);
+        return filePath;
     }
 
     @Transactional(readOnly = true)
     public List<ImageResponse> getAllMedia() {
         return mediaDao.findAllActive().stream()
-                .map(m -> MediaBeanMapper.mapEntityToDto(m, imageUrlConfig))
+                .map(m -> {
+                    ImageResponse dto = MediaBeanMapper.mapEntityToDto(m, imageUrlConfig);
+                    hydrateVariantUrls(dto);
+                    return dto;
+                })
                 .collect(Collectors.toList());
     }
 
@@ -85,7 +126,12 @@ public class MediaService {
     @Transactional(readOnly = true)
     public ImageResponse findByFilePath(String filePath) {
         Media media = mediaDao.findByFilePath(filePath);
-        return media != null ? MediaBeanMapper.mapEntityToDto(media, imageUrlConfig) : null;
+        if (media == null) {
+            return null;
+        }
+        ImageResponse dto = MediaBeanMapper.mapEntityToDto(media, imageUrlConfig);
+        hydrateVariantUrls(dto);
+        return dto;
     }
 
     // ── Update ───────────────────────────────────────────────────────────────
@@ -104,7 +150,13 @@ public class MediaService {
             media.setMediaType(dto.getMediaType());
         if (dto.getIsActive() != null)
             media.setIsActive(dto.getIsActive());
-        return MediaBeanMapper.mapEntityToDto(mediaDao.update(media), imageUrlConfig);
+        Media updated = mediaDao.update(media);
+        imageFlowCacheService.putResolvedFilePath(updated.getStorageFileName(), updated.getFilePath());
+        evictExperienceDetailsForMedia(updated.getId());
+        evictPromotionCachesIfNeeded(updated.getId());
+        ImageResponse response = MediaBeanMapper.mapEntityToDto(updated, imageUrlConfig);
+        hydrateVariantUrls(response);
+        return response;
     }
 
     // ── Delete ───────────────────────────────────────────────────────────────
@@ -116,8 +168,17 @@ public class MediaService {
     @Transactional
     public void deleteMediaWithStorage(Long id) {
         Media media = findMediaById(id);
+        evictExperienceDetailsForMedia(media.getId());
+        for (MediaVariant variant : mediaVariantDao.findByMediaId(media.getId())) {
+            if (!media.getFilePath().equals(variant.getFilePath())) {
+                storageService.delete(variant.getFilePath());
+            }
+        }
+        imageVariantService.deleteVariantsByMediaId(media.getId());
         storageService.delete(media.getFilePath());
         mediaDao.delete(media);
+        imageFlowCacheService.evictResolvedFilePath(media.getStorageFileName());
+        evictPromotionCachesIfNeeded(media.getId());
     }
 
     /**
@@ -136,5 +197,40 @@ public class MediaService {
             throw new ResourceNotFoundException("Media not found with id: " + id);
         }
         return media;
+    }
+
+    private void evictExperienceDetailsForMedia(Long mediaId) {
+        for (Long experienceId : experienceMediaMapperDao.findExperienceIdsByMediaId(mediaId)) {
+            imageFlowCacheService.evictExperienceDetail(experienceId);
+        }
+        imageFlowCacheService.evictExperienceLists();
+    }
+
+    private void evictPromotionCachesIfNeeded(Long mediaId) {
+        if (promotionAssetDao.existsByMediaId(mediaId)) {
+            imageFlowCacheService.evictPromotionCaches();
+        }
+    }
+
+    public void hydrateVariantUrls(ImageResponse dto) {
+        if (dto == null || dto.getId() == null) {
+            return;
+        }
+
+        ImageVariantService.VariantUrls urls = imageVariantService.getUrlsForMedia(dto.getId());
+        if (urls == null) {
+            return;
+        }
+
+        if (urls.getHeroUrl() != null) {
+            dto.setMediaUrl(urls.getHeroUrl());
+            dto.setUrl(urls.getHeroUrl());
+        }
+        if (urls.getThumbnailUrl() != null) {
+            dto.setThumbnailUrl(urls.getThumbnailUrl());
+        }
+        if (urls.getOriginalUrl() != null) {
+            dto.setOriginalUrl(urls.getOriginalUrl());
+        }
     }
 }

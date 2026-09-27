@@ -1,7 +1,6 @@
 package com.forvmom.core.producer;
 
 import com.forvmom.common.dto.events.BookingRequestEvent;
-import com.forvmom.common.utils.AppConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,7 +9,7 @@ import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
+import java.time.ZoneOffset;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -20,16 +19,17 @@ import java.util.concurrent.CompletableFuture;
  * <p>
  * Responsibilities:
  * <ul>
- * <li>Generate a unique {@code bookingId}</li>
- * <li>Stamp {@code requestedAt} timestamp</li>
- * <li>Send the event with the bookingId as the Kafka message key (for partition
- * routing)</li>
- * <li>Log success/failure callbacks</li>
+ * <li>Stamp the {@code requestedAt} timestamp</li>
+ * <li>Send the event keyed by {@code bookingId} so all events for one booking
+ * share a partition</li>
+ * <li>Return the broker acknowledgement future to the caller</li>
  * </ul>
  *
  * <p>
- * All business validation and price resolution are done upstream in
- * {@code BookingOrchestrationService} before this class is called.
+ * All business validation and price resolution happen upstream — capacity is
+ * reserved by {@code BookingOrchestrationService} and the event is enriched by
+ * {@code BookingEnrichmentTask} before this class is called.
+ *
  */
 @Service
 public class BookingEventProducer {
@@ -46,21 +46,26 @@ public class BookingEventProducer {
     }
 
     /**
-     * Generates a unique booking reference, stamps the timestamp, and publishes
-     * the event to Kafka.
+     * Stamps the event and publishes it to the {@code booking-requested} topic.
      *
-     * @param event the fully enriched booking event (without bookingId and
-     *              requestedAt — set here)
-     * @return the generated bookingId for the HTTP response
+     * <p>
+     * The caller must wait for the returned future before marking the outbox record
+     * as published.
+     *
+     * @param event the fully enriched booking event
+     * @return future completed by Kafka after broker acknowledgement
      */
-    public String sendBookingRequested(BookingRequestEvent event) {
-        String bookingId = generateBookingId();
-        event.setBookingId(bookingId);
-        event.setRequestedAt(LocalDateTime.now());
+    public CompletableFuture<SendResult<String, Object>> sendBookingRequested(BookingRequestEvent event) {
+        String bookingId = event.getBookingId();
+        if (event.getOccurredAt() != null) {
+            event.setRequestedAt(LocalDateTime.ofInstant(event.getOccurredAt(), ZoneOffset.UTC));
+        }
 
-        logger.info("Publishing booking-requested: bookingId={}, userId={}, experienceId={}, "
+        logger.info("Publishing booking-requested: bookingId={}, eventId={}, correlationId={}, userId={}, experienceId={}, "
                 + "slotMapperId={}, date={}, guests={}, grandTotal={}",
                 bookingId,
+                event.getEventId(),
+                event.getCorrelationId(),
                 event.getUserId(),
                 event.getExperienceId(),
                 event.getTimeSlotMapperId(),
@@ -68,41 +73,23 @@ public class BookingEventProducer {
                 event.getGuestCount(),
                 event.getGrandTotal());
 
-        /*
-        1. Order Guarantees for the Same Booking
-        All events for a specific booking (e.g., booking-requested, payment-processed, booking-confirmed) will
-        go to the same partition. This ensures they are processed in order by consumers.
-         */
-        CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(bookingRequestedTopic, bookingId,
-                event);
-
+        CompletableFuture<SendResult<String, Object>> future =
+                kafkaTemplate.send(bookingRequestedTopic, bookingId, event);
         future.whenComplete((result, ex) -> {
-            if (ex != null) {
-                logger.error("Failed to publish booking-requested: bookingId={}, error={}",
-                        bookingId, ex.getMessage(), ex);
-            } else {
-                logger.info("Successfully published booking-requested: bookingId={}, "
-                        + "topic={}, partition={}, offset={}",
-                        bookingId,
-                        result.getRecordMetadata().topic(),
-                        result.getRecordMetadata().partition(),
-                        result.getRecordMetadata().offset());
-            }
-        });
-
-        return bookingId;
-    }
-
-    // ── Private helpers ───────────────────────────────────────────────────────
-
-    /**
-     * Generates a booking reference in the format {@code MFB-<epoch_ms>-<uuid4>}.
-     * Example: {@code MFB-1735000000000-a3f2}
-     */
-    private String generateBookingId() {
-        return AppConstants.BOOKING_REFERENCE_PREFIX
-                + System.currentTimeMillis()
-                + "-"
-                + UUID.randomUUID().toString().substring(0, 4).toUpperCase();
+                    if (ex != null) {
+                        logger.error("Failed to publish booking-requested: bookingId={}, eventId={}, correlationId={}, error={}",
+                                bookingId, event.getEventId(), event.getCorrelationId(), ex.getMessage(), ex);
+                    } else {
+                        logger.info("Successfully published booking-requested: bookingId={}, eventId={}, correlationId={}, "
+                                + "topic={}, partition={}, offset={}",
+                                bookingId,
+                                event.getEventId(),
+                                event.getCorrelationId(),
+                                result.getRecordMetadata().topic(),
+                                result.getRecordMetadata().partition(),
+                                result.getRecordMetadata().offset());
+                    }
+                });
+        return future;
     }
 }

@@ -7,8 +7,24 @@ import com.forvmom.data.entities.ApplicationUser;
 
 import java.util.List;
 
+/**
+ * Static conversions between {@link ApplicationUser} entities and the user
+ * profile DTOs.
+ *
+ * <p>
+ * Two read projections exist: the end-user view, which carries profile fields
+ * only, and the admin view, which additionally flattens the linked
+ * authentication account (credential flags, timestamps and role names/ids).
+ */
 public class ApplicationUserBeanMapper {
 
+    /**
+     * Copies the editable profile fields from a request DTO onto an existing
+     * entity. Does nothing when either argument is {@code null}.
+     *
+     * @param dto    source of the new profile values
+     * @param entity entity to mutate in place
+     */
     public static void mapDtoToEntity(UserProfileRequestDto dto, ApplicationUser entity) {
         if (dto == null || entity == null) {
             return;
@@ -21,6 +37,13 @@ public class ApplicationUserBeanMapper {
         entity.setPreferredCity(dto.getPreferredCity());
     }
 
+    /**
+     * Maps an entity to the end-user profile projection, which deliberately omits
+     * all authentication data.
+     *
+     * @param entity the user entity, may be {@code null}
+     * @return the profile DTO, or {@code null} if {@code entity} is {@code null}
+     */
     public static AppUserResponseDto mapEntityToDto(ApplicationUser entity) {
         if (entity == null) {
             return null;
@@ -36,6 +59,14 @@ public class ApplicationUserBeanMapper {
         return dto;
     }
 
+    /**
+     * Maps an entity to the admin projection: profile fields plus the linked
+     * authentication account, including its credential flags and the names and ids
+     * of the assigned roles. Auth fields are left unset when no account is linked.
+     *
+     * @param entity the user entity, may be {@code null}
+     * @return the admin DTO, or {@code null} if {@code entity} is {@code null}
+     */
     public static AdminAppUserResponseDto mapEntityToAdminDto(
             ApplicationUser entity) {
         if (entity == null) {

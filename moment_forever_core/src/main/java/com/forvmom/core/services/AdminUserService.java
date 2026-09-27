@@ -28,6 +28,23 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+/**
+ * Administrative service for managing application users (the profile side) and
+ * their linked authentication accounts.
+ *
+ * <p>
+ * An account is modelled as a pair: an {@link AuthUser} that holds credentials
+ * and role assignments, and an {@link ApplicationUser} that holds the profile.
+ * Creation is delegated to {@code AuthService#register}, which creates both
+ * sides; this service then re-reads the profile so it can return an admin view.
+ *
+ * <p>
+ * The class is annotated {@code @Transactional} at type level, so all public
+ * methods run in a transaction; read paths additionally use
+ * {@code readOnly = true} and rely on fetch-joined queries
+ * ({@code findByIdWithAuthAndRoles}, {@code findAllWithAuthAndRoles}) to load
+ * auth and roles in a single round trip.
+ */
 @Service
 @Transactional
 public class AdminUserService {
@@ -49,6 +66,18 @@ public class AdminUserService {
     @Autowired
     private RoleDao roleDao;
 
+    /**
+     * Registers a new account through {@code AuthService} and returns the freshly
+     * created profile in the admin view. The profile is re-read by auth user id
+     * because registration creates the {@link ApplicationUser} row as a side
+     * effect.
+     *
+     * @param request the registration payload (credentials, profile and role data)
+     * @return the created user in the admin response shape, with
+     *         {@code createdBy} populated from the auth response
+     * @throws ResourceNotFoundException if registration succeeded but no profile
+     *                                   row could be found for the new auth id
+     */
     @Transactional
     public AdminAppUserResponseDto createUser(RegisterRequestDto request) {
         AuthResponse authResponse = authService.register(request);
@@ -64,6 +93,13 @@ public class AdminUserService {
         return res;
     }
 
+    /**
+     * Loads a single application user together with its auth record and roles.
+     *
+     * @param id the application user identifier
+     * @return the user in the admin response shape
+     * @throws ResourceNotFoundException if no user exists with the given id
+     */
     @Transactional(readOnly = true)
     public AdminAppUserResponseDto getAppUserById(Long id) {
         ApplicationUser appUser = applicationUserDao.findByIdWithAuthAndRoles(id)
@@ -71,6 +107,13 @@ public class AdminUserService {
         return ApplicationUserBeanMapper.mapEntityToAdminDto(appUser);
     }
 
+    /**
+     * Looks up an application user by email address, ignoring case.
+     *
+     * @param email the email address to search for
+     * @return the user in the admin response shape
+     * @throws ResourceNotFoundException if no user exists with the given email
+     */
     @Transactional(readOnly = true)
     public AdminAppUserResponseDto getAppUserByEmailId(String email) {
         Optional<ApplicationUser> appUser = applicationUserDao.findByEmailIgnoreCase(email);
@@ -80,6 +123,13 @@ public class AdminUserService {
         return ApplicationUserBeanMapper.mapEntityToAdminDto(appUser.get());
     }
 
+    /**
+     * Lists all application users with their auth records and roles fetched in one
+     * query.
+     *
+     * @return every user in the admin response shape
+     * @throws ResourceNotFoundException if there are no users at all
+     */
     @Transactional(readOnly = true)
     public List<AdminAppUserResponseDto> getAllAppUser() {
         // Use optimized query to fetch All Users + Auth + Roles
@@ -92,6 +142,20 @@ public class AdminUserService {
                 .toList();
     }
 
+    /**
+     * Updates a user's profile fields and, when {@code roleId} is supplied,
+     * replaces the user's entire role set with that single role.
+     *
+     * <p>
+     * The role change is applied to the associated {@link AuthUser} in the managed
+     * persistence context, so it is flushed when the transaction commits.
+     *
+     * @param userId  the application user identifier
+     * @param userDto the updatable profile fields, optionally carrying a role id
+     * @return the updated user in the admin response shape
+     * @throws ResourceNotFoundException if the user does not exist, or if the
+     *                                   requested role id is unknown
+     */
     @Transactional
     public AdminAppUserResponseDto updateAppUser(Long userId,
                                                  UserProfileRequestDto userDto) {
@@ -154,6 +218,13 @@ public class AdminUserService {
     // logger.info("User account deleted successfully for userId: {}", userId);
     // }
 
+    /**
+     * Deletes only the application user's profile row, leaving the associated
+     * authentication account in place.
+     *
+     * @param userId the application user identifier
+     * @throws CustomAuthException if no profile exists for the given id
+     */
     @Transactional
     public void deleteUserProfile(Long userId) {
         ApplicationUser userProfile = applicationUserDao.findById(userId);
@@ -165,6 +236,13 @@ public class AdminUserService {
         logger.info("User Profile deleted successfully for userId: {}", userId);
     }
 
+    /**
+     * Deletes the whole account: first the application user profile, then the
+     * linked authentication record.
+     *
+     * @param userId the application user identifier
+     * @throws CustomAuthException if no profile exists for the given id
+     */
     @Transactional
     public void deleteAccount(Long userId) {
         ApplicationUser userProfile = applicationUserDao.findById(userId);
@@ -197,6 +275,14 @@ public class AdminUserService {
     // return responseDtos;
     // }
 
+    /**
+     * Returns the roles currently assigned to an application user.
+     *
+     * @param appUserId the application user identifier
+     * @return the assigned roles, or an empty list when the user has no auth record
+     *         or no role assignments
+     * @throws ResourceNotFoundException if no user exists with the given id
+     */
     @Transactional
     public List<RoleResponseDto> getRolesByAppUserId(Long appUserId) {
         ApplicationUser appUser = applicationUserDao.findByIdWithAuthAndRoles(appUserId)

@@ -42,6 +42,25 @@ public class GlobalExceptionHandler {
                 .body(ResponseUtil.buildBadRequestResponse(ex.getMessage()));
     }
 
+    @ExceptionHandler(IdempotencyConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIdempotencyConflict(IdempotencyConflictException ex) {
+        log.warn("Idempotency conflict: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ResponseUtil.buildConflictResponse(ex.getMessage()));
+    }
+
+    @ExceptionHandler(IdempotencyRequestInProgressException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIdempotencyRequestInProgress(
+            IdempotencyRequestInProgressException ex
+    ) {
+        log.info("Idempotent request still in progress: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .header("Retry-After", "1")
+                .body(ResponseUtil.buildConflictResponse(ex.getMessage()));
+    }
+
     // 3️⃣ Handle resource not found
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleResourceNotFound(ResourceNotFoundException ex) {

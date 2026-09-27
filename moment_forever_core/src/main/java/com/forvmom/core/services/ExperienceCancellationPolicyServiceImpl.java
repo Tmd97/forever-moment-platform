@@ -16,6 +16,20 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+/**
+ * JPA-backed implementation of {@link ExperienceCancellationPolicyService}.
+ *
+ * <p>
+ * Cancellation policies are kept as a reusable master catalog
+ * ({@link ExperienceCancellationPolicy}) and linked to individual experiences
+ * through {@link ExperienceCancellationPolicyMapper} junction rows that carry a
+ * display order. Deleting a master policy first soft-deletes all of its junction
+ * rows, so it is removed from every experience that referenced it.
+ *
+ * <p>
+ * All operations are transactional; reads use {@code readOnly = true}. This
+ * service does not touch the Redis catalog cache.
+ */
 @Service
 public class ExperienceCancellationPolicyServiceImpl implements ExperienceCancellationPolicyService {
 
@@ -28,6 +42,16 @@ public class ExperienceCancellationPolicyServiceImpl implements ExperienceCancel
     @Autowired
     private ExperienceDao experienceDao;
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Creates a master policy only; it is not linked to any experience until
+     * {@link #attachToExperience(Long, Long, Integer)} is called.
+     *
+     * @param requestDto the policy attributes
+     * @return the created policy
+     */
     @Override
     @Transactional
     public CancellationPolicyResponseDto createPolicy(CancellationPolicyRequestDto requestDto) {
@@ -36,6 +60,11 @@ public class ExperienceCancellationPolicyServiceImpl implements ExperienceCancel
         return InclusionPolicyBeanMapper.mapPolicyToDto(saved);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @return all master policies, or an empty list when none exist
+     */
     @Override
     @Transactional(readOnly = true)
     public List<CancellationPolicyResponseDto> getAllPolicies() {
@@ -44,6 +73,18 @@ public class ExperienceCancellationPolicyServiceImpl implements ExperienceCancel
                 .collect(java.util.stream.Collectors.toList());
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Updates the master row, so the change applies to every experience the policy
+     * is attached to.
+     *
+     * @param id         the master policy identifier
+     * @param requestDto the new policy attributes
+     * @return the updated policy
+     * @throws ResourceNotFoundException if no policy exists with the given id
+     */
     @Override
     @Transactional
     public CancellationPolicyResponseDto updatePolicy(Long id, CancellationPolicyRequestDto requestDto) {
@@ -54,6 +95,17 @@ public class ExperienceCancellationPolicyServiceImpl implements ExperienceCancel
         return InclusionPolicyBeanMapper.mapPolicyToDto(policyDao.update(existing));
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * The junction rows are soft-deleted before the master row, so no experience
+     * is left pointing at a deleted policy.
+     *
+     * @param id the master policy identifier
+     * @return {@code true} once the delete has been issued
+     * @throws ResourceNotFoundException if no policy exists with the given id
+     */
     @Override
     @Transactional
     public boolean deletePolicy(Long id) {
@@ -66,6 +118,20 @@ public class ExperienceCancellationPolicyServiceImpl implements ExperienceCancel
         return true;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * A {@code null} display order is stored as {@code 0}.
+     *
+     * @param experienceId the experience identifier
+     * @param policyId     the master policy identifier
+     * @param displayOrder the position of the policy within the experience
+     * @throws IllegalStateException     if the policy is already attached to that
+     *                                   experience
+     * @throws ResourceNotFoundException if the experience or the policy does not
+     *                                   exist
+     */
     @Override
     @Transactional
     public void attachToExperience(Long experienceId, Long policyId, Integer displayOrder) {
@@ -89,6 +155,18 @@ public class ExperienceCancellationPolicyServiceImpl implements ExperienceCancel
         policyMapperDao.save(mapper);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Only the junction row is removed; the master policy stays available for
+     * other experiences.
+     *
+     * @param experienceId the experience identifier
+     * @param policyId     the master policy identifier
+     * @throws ResourceNotFoundException if the policy is not attached to that
+     *                                   experience
+     */
     @Override
     @Transactional
     public void detachFromExperience(Long experienceId, Long policyId) {
@@ -101,6 +179,12 @@ public class ExperienceCancellationPolicyServiceImpl implements ExperienceCancel
         policyMapperDao.delete(mapper);
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * @param experienceId the experience identifier
+     * @return the policies attached to that experience, or an empty list
+     */
     @Override
     @Transactional(readOnly = true)
     public List<CancellationPolicyResponseDto> getPoliciesForExperience(Long experienceId) {

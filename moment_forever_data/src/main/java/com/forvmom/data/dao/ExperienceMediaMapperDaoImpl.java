@@ -4,6 +4,7 @@ import com.forvmom.data.entities.ExperienceMediaMapper;
 import jakarta.persistence.NoResultException;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collections;
 import java.util.List;
 
 @Repository
@@ -67,5 +68,33 @@ public class ExperienceMediaMapperDaoImpl extends GenericDaoImpl<ExperienceMedia
         } catch (NoResultException e) {
             return null;
         }
+    }
+
+    @Override
+    public List<ExperienceMediaMapper> findActiveByExperienceIdsOrdered(List<Long> experienceIds) {
+        if (experienceIds == null || experienceIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return em.createQuery(
+                "SELECT m FROM ExperienceMediaMapper m " +
+                        "JOIN FETCH m.media med " +
+                        "WHERE m.experience.id IN :expIds " +
+                        "AND m.deleted = false " +
+                        "AND m.isActive = true " +
+                        "AND med.isActive = true " +
+                        "ORDER BY m.experience.id ASC, m.isPrimary DESC, m.displayOrder ASC, m.createdOn ASC",
+                ExperienceMediaMapper.class)
+                .setParameter("expIds", experienceIds)
+                .getResultList();
+    }
+
+    @Override
+    public List<Long> findExperienceIdsByMediaId(Long mediaId) {
+        return em.createQuery(
+                "SELECT DISTINCT m.experience.id FROM ExperienceMediaMapper m " +
+                        "WHERE m.media.id = :mediaId AND m.deleted = false",
+                Long.class)
+                .setParameter("mediaId", mediaId)
+                .getResultList();
     }
 }
