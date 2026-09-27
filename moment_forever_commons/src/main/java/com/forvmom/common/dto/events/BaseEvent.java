@@ -12,7 +12,8 @@ public abstract class BaseEvent {
     private String eventType;
 
     public BaseEvent() {
-        this.eventType = this.getClass().getSimpleName();
+        // eventType must be set explicitly by each subclass using the canonical constant
+        // e.g. setEventType("BOOKING_REQUESTED") — do NOT derive from class name
     }
 
     public String getEventId() { return eventId; }

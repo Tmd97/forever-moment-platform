@@ -20,6 +20,7 @@ public class PaymentRequestedEvent extends BaseEvent {
 
     public PaymentRequestedEvent() {
         super();
+        setEventType("PAYMENT_REQUESTED");
     }
 
     public String getBookingId() {

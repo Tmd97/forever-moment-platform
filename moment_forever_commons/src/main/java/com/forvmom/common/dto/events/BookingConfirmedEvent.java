@@ -19,6 +19,7 @@ public class BookingConfirmedEvent extends BaseEvent {
 
     public BookingConfirmedEvent() {
         super();
+        setEventType("BOOKING_CONFIRMED");
     }
 
     public String getBookingId() {
