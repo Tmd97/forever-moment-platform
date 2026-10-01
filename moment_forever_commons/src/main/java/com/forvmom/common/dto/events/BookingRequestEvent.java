@@ -101,6 +101,7 @@ public class BookingRequestEvent extends BaseEvent {
 
     public BookingRequestEvent() {
         super();
+        setEventType("BOOKING_REQUESTED");
     }
 
     // ── Getters & Setters ─────────────────────────────────────────────────────

@@ -41,7 +41,7 @@ class BookingFailureEventProcessorTest {
     void exactDuplicateSkipsBusinessEffect() {
         BookingFailedEvent event = event("booking-service", "evt-1");
         when(inboxDao.claim(
-                "booking-service", "evt-1", "BookingFailedEvent", "MFB-100", "corr-1"))
+                "booking-service", "evt-1", "BOOKING_FAILED", "MFB-100", "corr-1"))
                 .thenReturn(0);
 
         assertEquals(
@@ -58,10 +58,10 @@ class BookingFailureEventProcessorTest {
         BookingFailedEvent first = event("booking-service", "evt-1");
         BookingFailedEvent second = event("recovery-service", "evt-1");
         when(inboxDao.claim(
-                "booking-service", "evt-1", "BookingFailedEvent", "MFB-100", "corr-1"))
+                "booking-service", "evt-1", "BOOKING_FAILED", "MFB-100", "corr-1"))
                 .thenReturn(1);
         when(inboxDao.claim(
-                "recovery-service", "evt-1", "BookingFailedEvent", "MFB-100", "corr-1"))
+                "recovery-service", "evt-1", "BOOKING_FAILED", "MFB-100", "corr-1"))
                 .thenReturn(1);
         when(reservationService.releaseOnce(
                 "MFB-100", 100L, LocalDate.of(2026, 8, 20), 4))
@@ -98,7 +98,7 @@ class BookingFailureEventProcessorTest {
         when(inboxDao.claim(
                 org.mockito.ArgumentMatchers.eq("booking-service"),
                 org.mockito.ArgumentMatchers.anyString(),
-                org.mockito.ArgumentMatchers.eq("BookingFailedEvent"),
+                org.mockito.ArgumentMatchers.eq("BOOKING_FAILED"),
                 org.mockito.ArgumentMatchers.eq("MFB-100"),
                 org.mockito.ArgumentMatchers.eq("corr-1")))
                 .thenReturn(1);
@@ -163,7 +163,7 @@ class BookingFailureEventProcessorTest {
         when(inboxDao.claim(
                 "booking-service",
                 "evt-concurrent",
-                "BookingFailedEvent",
+                "BOOKING_FAILED",
                 "MFB-100",
                 "corr-1"))
                 .thenReturn(1, 0);
@@ -191,7 +191,7 @@ class BookingFailureEventProcessorTest {
     void businessFailureDoesNotReachProcessedTransition() {
         BookingFailedEvent event = event("booking-service", "evt-1");
         when(inboxDao.claim(
-                "booking-service", "evt-1", "BookingFailedEvent", "MFB-100", "corr-1"))
+                "booking-service", "evt-1", "BOOKING_FAILED", "MFB-100", "corr-1"))
                 .thenReturn(1);
         when(reservationService.releaseOnce(
                 "MFB-100", 100L, LocalDate.of(2026, 8, 20), 4))
@@ -201,7 +201,7 @@ class BookingFailureEventProcessorTest {
 
         InOrder order = inOrder(inboxDao, reservationService);
         order.verify(inboxDao).claim(
-                "booking-service", "evt-1", "BookingFailedEvent", "MFB-100", "corr-1");
+                "booking-service", "evt-1", "BOOKING_FAILED", "MFB-100", "corr-1");
         order.verify(reservationService).releaseOnce(
                 "MFB-100", 100L, LocalDate.of(2026, 8, 20), 4);
         verify(inboxDao, never()).markProcessed(any(), any(), any());

@@ -31,6 +31,7 @@ public class BookingFailedEvent extends BaseEvent {
 
     public BookingFailedEvent() {
         super();
+        setEventType("BOOKING_FAILED");
     }
 
     public String getBookingId() {
