@@ -12,12 +12,18 @@ import com.forvmom.core.mapper.ExperienceMediaBeanMapper;
 import com.forvmom.core.mapper.InclusionPolicyBeanMapper;
 import com.forvmom.data.dao.ExperienceDao;
 import com.forvmom.data.dao.ExperienceDetailDao;
+import com.forvmom.data.dao.ExperienceLocationMapperDao;
+import com.forvmom.data.dao.ExperienceLocationPincodeMapperDao;
 import com.forvmom.data.dao.ExperienceMediaMapperDao;
+import com.forvmom.data.dao.PincodeDao;
 import com.forvmom.data.dao.SubCategoryDao;
 import com.forvmom.data.entities.Experience;
 import com.forvmom.data.entities.ExperienceDetail;
+import com.forvmom.data.entities.ExperienceLocationMapper;
+import com.forvmom.data.entities.ExperienceLocationPincodeMapper;
 import com.forvmom.data.entities.ExperienceMediaMapper;
 import com.forvmom.data.entities.Media;
+import com.forvmom.data.entities.Pincode;
 import com.forvmom.data.entities.SubCategory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,9 +32,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -85,6 +93,15 @@ public class ExperienceServiceImpl implements ExperienceService {
 
     @Autowired
     private ImageVariantService imageVariantService;
+
+    @Autowired
+    private PincodeDao pincodeDao;
+
+    @Autowired
+    private ExperienceLocationMapperDao experienceLocationMapperDao;
+
+    @Autowired
+    private ExperienceLocationPincodeMapperDao experienceLocationPincodeMapperDao;
 
     /**
      * {@inheritDoc}
@@ -303,22 +320,35 @@ public class ExperienceServiceImpl implements ExperienceService {
     @Override
     @Transactional(readOnly = true)
     public List<ExperienceHighlightResponseDto> getAllActive() {
+        return getAllActive(null);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * @return the active experiences as highlights, or an empty list
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<ExperienceHighlightResponseDto> getAllActive(String pincodeCode) {
         List<ExperienceHighlightResponseDto> cached = imageFlowCacheService.getExperienceListActive();
+        List<ExperienceHighlightResponseDto> highlights;
         if (cached != null) {
             logger.info("Cache hit: experience list key exp:list:active:v2:all");
-            return cached;
-        }
-        logger.info("Cache miss: experience list key exp:list:active:v2:all; loading from DB");
+            highlights = cached;
+        } else {
+            logger.info("Cache miss: experience list key exp:list:active:v2:all; loading from DB");
 
-        List<Experience> experiences = experienceDao.findAllActive();
-        if (experiences == null || experiences.isEmpty())
-            return new ArrayList<>();
-        List<ExperienceHighlightResponseDto> highlights = experiences.stream()
-                .map(ExperienceBeanMapper::mapEntityToHighlightDto)
-                .collect(Collectors.toList());
-        enrichHighlightsWithCardImages(highlights);
-        imageFlowCacheService.putExperienceListActive(highlights);
-        return highlights;
+            List<Experience> experiences = experienceDao.findAllActive();
+            if (experiences == null || experiences.isEmpty())
+                return new ArrayList<>();
+            highlights = experiences.stream()
+                    .map(ExperienceBeanMapper::mapEntityToHighlightDto)
+                    .collect(Collectors.toList());
+            enrichHighlightsWithCardImages(highlights);
+            imageFlowCacheService.putExperienceListActive(highlights);
+        }
+        return filterByPincode(highlights, pincodeCode);
     }
 
     /**
@@ -334,49 +364,80 @@ public class ExperienceServiceImpl implements ExperienceService {
     @Override
     @Transactional(readOnly = true)
     public List<ExperienceHighlightResponseDto> getBySubCategory(Long subCategoryId) {
-        List<ExperienceHighlightResponseDto> cached = imageFlowCacheService.getExperienceListBySubCategory(subCategoryId);
-        if (cached != null) {
-            logger.info("Cache hit: experience list key exp:list:subcategory:{}:v2:all", subCategoryId);
-            return cached;
-        }
-        logger.info("Cache miss: experience list key exp:list:subcategory:{}:v2:all; loading from DB", subCategoryId);
-
-        List<Experience> experiences = experienceDao.findBySubCategoryId(subCategoryId);
-        if (experiences == null || experiences.isEmpty()) {
-            throw new ResourceNotFoundException("No experiences found for sub-category id " + subCategoryId);
-        }
-        List<ExperienceHighlightResponseDto> highlights = experiences.stream()
-                .map(ExperienceBeanMapper::mapEntityToHighlightDto)
-                .collect(Collectors.toList());
-        enrichHighlightsWithCardImages(highlights);
-        imageFlowCacheService.putExperienceListBySubCategory(subCategoryId, highlights);
-        return highlights;
+        return getBySubCategory(subCategoryId, null);
     }
 
     /**
      * {@inheritDoc}
      *
+     * <p>
+     * Unlike the other list methods, an empty result (before pincode filtering)
+     * is reported as an error.
+     *
+     * @param subCategoryId the sub-category identifier
+     * @param pincodeCode   the pincode to filter by, or {@code null}/blank for no
+     *                      filtering
+     * @return the experiences of that sub-category as highlights
+     * @throws ResourceNotFoundException if the sub-category has no experiences
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<ExperienceHighlightResponseDto> getBySubCategory(Long subCategoryId, String pincodeCode) {
+        List<ExperienceHighlightResponseDto> cached = imageFlowCacheService.getExperienceListBySubCategory(subCategoryId);
+        List<ExperienceHighlightResponseDto> highlights;
+        if (cached != null) {
+            logger.info("Cache hit: experience list key exp:list:subcategory:{}:v2:all", subCategoryId);
+            highlights = cached;
+        } else {
+            logger.info("Cache miss: experience list key exp:list:subcategory:{}:v2:all; loading from DB", subCategoryId);
+
+            List<Experience> experiences = experienceDao.findBySubCategoryId(subCategoryId);
+            if (experiences == null || experiences.isEmpty()) {
+                throw new ResourceNotFoundException("No experiences found for sub-category id " + subCategoryId);
+            }
+            highlights = experiences.stream()
+                    .map(ExperienceBeanMapper::mapEntityToHighlightDto)
+                    .collect(Collectors.toList());
+            enrichHighlightsWithCardImages(highlights);
+            imageFlowCacheService.putExperienceListBySubCategory(subCategoryId, highlights);
+        }
+        return filterByPincode(highlights, pincodeCode);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ExperienceHighlightResponseDto> getFeatured() {
+        return getFeatured(null);
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * @param pincodeCode the pincode to filter by, or {@code null}/blank for no
+     *                     filtering
      * @return the featured experiences as highlights, or an empty list
      */
     @Override
     @Transactional(readOnly = true)
-    public List<ExperienceHighlightResponseDto> getFeatured() {
+    public List<ExperienceHighlightResponseDto> getFeatured(String pincodeCode) {
         List<ExperienceHighlightResponseDto> cached = imageFlowCacheService.getExperienceListFeatured();
+        List<ExperienceHighlightResponseDto> highlights;
         if (cached != null) {
             logger.info("Cache hit: experience list key exp:list:featured:v2:all");
-            return cached;
-        }
-        logger.info("Cache miss: experience list key exp:list:featured:v2:all; loading from DB");
+            highlights = cached;
+        } else {
+            logger.info("Cache miss: experience list key exp:list:featured:v2:all; loading from DB");
 
-        List<Experience> experiences = experienceDao.findFeatured();
-        if (experiences == null || experiences.isEmpty())
-            return new ArrayList<>();
-        List<ExperienceHighlightResponseDto> highlights = experiences.stream()
-                .map(ExperienceBeanMapper::mapEntityToHighlightDto)
-                .collect(Collectors.toList());
-        enrichHighlightsWithCardImages(highlights);
-        imageFlowCacheService.putExperienceListFeatured(highlights);
-        return highlights;
+            List<Experience> experiences = experienceDao.findFeatured();
+            if (experiences == null || experiences.isEmpty())
+                return new ArrayList<>();
+            highlights = experiences.stream()
+                    .map(ExperienceBeanMapper::mapEntityToHighlightDto)
+                    .collect(Collectors.toList());
+            enrichHighlightsWithCardImages(highlights);
+            imageFlowCacheService.putExperienceListFeatured(highlights);
+        }
+        return filterByPincode(highlights, pincodeCode);
     }
 
     /**
@@ -574,5 +635,76 @@ public class ExperienceServiceImpl implements ExperienceService {
             throw new ResourceNotFoundException("No detail found for experience id " + experienceId);
         }
         return ExperienceBeanMapper.mapDetailToDto(detail);
+    }
+
+    /**
+     * Filters a highlight list down to experiences serviceable at a pincode.
+     *
+     * <p>
+     * Returns a new list (never mutates {@code highlights}, which may be a
+     * cached instance shared across requests). When {@code pincodeCode} is
+     * {@code null}/blank the input list is returned unchanged.
+     *
+     * @param highlights  the highlight list to filter (cached or freshly loaded)
+     * @param pincodeCode the pincode to filter by, or {@code null}/blank for no
+     *                    filtering
+     * @return the filtered list
+     * @throws ResourceNotFoundException if the pincode is unknown
+     */
+    private List<ExperienceHighlightResponseDto> filterByPincode(List<ExperienceHighlightResponseDto> highlights,
+                                                                  String pincodeCode) {
+        if (pincodeCode == null || pincodeCode.trim().isEmpty() || highlights.isEmpty()) {
+            return highlights;
+        }
+
+        Pincode pincode = pincodeDao.findByPincodeCode(pincodeCode.trim());
+        if (pincode == null) {
+            throw new ResourceNotFoundException("Pincode not found: " + pincodeCode);
+        }
+
+        List<Long> serviceableIds = experienceLocationPincodeMapperDao
+                .findServiceableExperienceIds(pincode.getLocation().getId(), pincode.getId());
+        Set<Long> serviceableIdSet = new HashSet<>(serviceableIds);
+
+        return highlights.stream()
+                .filter(h -> serviceableIdSet.contains(h.getId()))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * @param experienceId the experience identifier
+     * @param pincodeCode  the pincode code entered by the customer
+     * @return {@code true} when the experience is serviceable at the pincode
+     * @throws ResourceNotFoundException if the experience or pincode is unknown
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isExperienceServiceableAtPincode(Long experienceId, String pincodeCode) {
+        if (experienceDao.findById(experienceId) == null) {
+            throw new ResourceNotFoundException("Experience not found with id " + experienceId);
+        }
+        Pincode pincode = pincodeDao.findByPincodeCode(pincodeCode);
+        if (pincode == null) {
+            throw new ResourceNotFoundException("Pincode not found: " + pincodeCode);
+        }
+
+        ExperienceLocationMapper mapper = experienceLocationMapperDao
+                .findByExperienceIdAndLocationId(experienceId, pincode.getLocation().getId());
+        if (mapper == null || !Boolean.TRUE.equals(mapper.getIsActive())) {
+            return false;
+        }
+
+        List<ExperienceLocationPincodeMapper> restrictions = experienceLocationPincodeMapperDao
+                .findByMapperId(mapper.getId());
+        if (restrictions.isEmpty()) {
+            // Unrestricted: serviceable everywhere in the attached location.
+            return true;
+        }
+
+        return restrictions.stream()
+                .anyMatch(r -> Boolean.TRUE.equals(r.getIsActive())
+                        && r.getPincode().getId().equals(pincode.getId()));
     }
 }

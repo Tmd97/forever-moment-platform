@@ -33,11 +33,38 @@ public interface ExperienceService {
     /** Returns lightweight list of active experiences only */
     List<ExperienceHighlightResponseDto> getAllActive();
 
+    /**
+     * Returns lightweight list of active experiences, optionally filtered to
+     * only those serviceable at the given pincode.
+     *
+     * @param pincodeCode the pincode to filter by, or {@code null}/blank for no
+     *                     filtering
+     */
+    List<ExperienceHighlightResponseDto> getAllActive(String pincodeCode);
+
     /** Returns lightweight list filtered by sub-category */
     List<ExperienceHighlightResponseDto> getBySubCategory(Long subCategoryId);
 
+    /**
+     * Returns lightweight list filtered by sub-category, optionally further
+     * filtered to only those serviceable at the given pincode.
+     *
+     * @param pincodeCode the pincode to filter by, or {@code null}/blank for no
+     *                     filtering
+     */
+    List<ExperienceHighlightResponseDto> getBySubCategory(Long subCategoryId, String pincodeCode);
+
     /** Returns lightweight list of featured active experiences */
     List<ExperienceHighlightResponseDto> getFeatured();
+
+    /**
+     * Returns lightweight list of featured active experiences, optionally
+     * filtered to only those serviceable at the given pincode.
+     *
+     * @param pincodeCode the pincode to filter by, or {@code null}/blank for no
+     *                     filtering
+     */
+    List<ExperienceHighlightResponseDto> getFeatured(String pincodeCode);
 
     boolean deleteExperience(Long id);
 
@@ -49,4 +76,21 @@ public interface ExperienceService {
     ExperienceDetailResponseDto upsertDetail(Long experienceId, ExperienceDetailRequestDto requestDto);
 
     ExperienceDetailResponseDto getDetail(Long experienceId);
+
+    /**
+     * Checks whether an experience is serviceable at a specific pincode.
+     *
+     * <p>
+     * Resolves the pincode's owning location, finds the experience's active
+     * attachment to that location, and returns {@code true} when either that
+     * attachment has no pincode restriction (serviceable everywhere in the
+     * location) or it explicitly whitelists this pincode.
+     *
+     * @param experienceId the experience identifier
+     * @param pincodeCode  the pincode code entered by the customer
+     * @return {@code true} when the experience is serviceable at the pincode
+     * @throws com.forvmom.common.errorhandler.ResourceNotFoundException if the
+     *         experience or pincode is unknown
+     */
+    boolean isExperienceServiceableAtPincode(Long experienceId, String pincodeCode);
 }

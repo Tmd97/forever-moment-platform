@@ -79,6 +79,7 @@ public class CategoryMediaControllerAdmin {
         if (attachRequest == null) {
             attachRequest = new ExperienceMediaAttachRequestDto();
         }
+
         ImageResponse uploaded = imageService.uploadImage(file, metadata);
         try {
             ExperienceMediaResponseDto response = catalogMediaService.attachMediaToCategory(

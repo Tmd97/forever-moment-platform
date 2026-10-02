@@ -38,6 +38,9 @@ public class AppConstants {
     public static final int MIN_GUEST_COUNT = 1;
     public static final int MAX_GUEST_COUNT = 50;
 
+    // Support
+    public static final String SUPPORT_REFERENCE_PREFIX = "SUP-";
+
     // Cache
     public static final String CACHE_CATEGORIES = "categories";
     public static final String CACHE_SERVICE_TYPES = "serviceTypes";

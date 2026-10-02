@@ -181,6 +181,45 @@ public interface LocationService {
      */
     void toggleExperienceAttachmentActive(Long mapperId);
 
+    // ── Experience-Location Pincode Restriction ───────────────────────────────
+
+    /**
+     * Lists the pincode whitelist restricting an experience-location mapping.
+     * An empty result means the attachment is unrestricted — serviceable at
+     * every pincode of the mapping's location.
+     *
+     * @param mapperId the experience-location mapping identifier
+     * @return the restricting pincodes, or an empty list when unrestricted
+     * @throws ResourceNotFoundException if no such mapping exists
+     */
+    List<PincodeResponseDto> getPincodesForMapper(Long mapperId);
+
+    /**
+     * Replaces the pincode whitelist restricting an experience-location mapping.
+     * Passing an empty or {@code null} list clears all restrictions, making the
+     * attachment serviceable at every pincode of the location again.
+     *
+     * @param mapperId   the experience-location mapping identifier
+     * @param pincodeIds the new set of restricting pincode ids
+     * @return the new restriction set
+     * @throws ResourceNotFoundException if the mapping or any pincode id is
+     *                                   unknown
+     * @throws IllegalArgumentException  if a pincode does not belong to the
+     *                                   mapping's location
+     */
+    List<PincodeResponseDto> replacePincodesForMapper(Long mapperId, List<Long> pincodeIds);
+
+    /**
+     * Removes a single pincode from an experience-location mapping's
+     * restriction set.
+     *
+     * @param mapperId  the experience-location mapping identifier
+     * @param pincodeId the pincode to remove from the whitelist
+     * @throws ResourceNotFoundException if the mapping has no restriction for
+     *                                   that pincode
+     */
+    void removePincodeFromMapper(Long mapperId, Long pincodeId);
+
     /// /////////category association with location
     /**
      * Attaches a category to a location so it appears in that location's catalog.

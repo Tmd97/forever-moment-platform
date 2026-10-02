@@ -46,6 +46,9 @@ public class LocationServiceImpl implements LocationService {
     private ExperienceLocationMapperDao locationMapperDao;
 
     @Autowired
+    private ExperienceLocationPincodeMapperDao locationPincodeMapperDao;
+
+    @Autowired
     private ExperienceDao experienceDao;
 
     @Autowired
@@ -520,6 +523,98 @@ public class LocationServiceImpl implements LocationService {
         ExperienceLocationMapper updated = locationMapperDao.update(mapper);
         catalogCacheService.warmLocationCache(updated);
         imageFlowCacheService.evictExperienceDetail(updated.getExperience().getId());
+    }
+
+    // ── Experience-Location Pincode Restriction ────────────────────────────────
+
+    /**
+     * {@inheritDoc}
+     *
+     * @param mapperId the experience-location mapping identifier
+     * @return the restricting pincodes, or an empty list when unrestricted
+     * @throws ResourceNotFoundException if no such mapping exists
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<PincodeResponseDto> getPincodesForMapper(Long mapperId) {
+        ExperienceLocationMapper mapper = locationMapperDao.findById(mapperId);
+        if (mapper == null) {
+            throw new ResourceNotFoundException("Location mapping not found: " + mapperId);
+        }
+        return locationPincodeMapperDao.findByMapperId(mapperId).stream()
+                .map(p -> LocationBeanMapper.mapPincodeToDto(p.getPincode(), false))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * Every pincode must belong to the mapping's own location — this keeps the
+     * whitelist meaningful, since a pincode from a different location could never
+     * resolve to this (experience, location) pair anyway. The old restriction set
+     * is soft-deleted before the new one is inserted, so this call is a full
+     * replace, not a merge.
+     *
+     * @param mapperId   the experience-location mapping identifier
+     * @param pincodeIds the new set of restricting pincode ids
+     * @return the new restriction set
+     * @throws ResourceNotFoundException if the mapping or any pincode id is
+     *                                   unknown
+     * @throws IllegalArgumentException  if a pincode does not belong to the
+     *                                   mapping's location
+     */
+    @Override
+    @Transactional
+    public List<PincodeResponseDto> replacePincodesForMapper(Long mapperId, List<Long> pincodeIds) {
+        ExperienceLocationMapper mapper = locationMapperDao.findById(mapperId);
+        if (mapper == null) {
+            throw new ResourceNotFoundException("Location mapping not found: " + mapperId);
+        }
+
+        locationPincodeMapperDao.deleteAllByMapperId(mapperId);
+
+        if (pincodeIds == null || pincodeIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        List<PincodeResponseDto> result = new ArrayList<>();
+        for (Long pincodeId : pincodeIds) {
+            Pincode pincode = pincodeDao.findById(pincodeId);
+            if (pincode == null) {
+                throw new ResourceNotFoundException("Pincode not found: " + pincodeId);
+            }
+            if (!pincode.getLocation().getId().equals(mapper.getLocation().getId())) {
+                throw new IllegalArgumentException(
+                        "Pincode " + pincodeId + " does not belong to location " + mapper.getLocation().getId());
+            }
+            ExperienceLocationPincodeMapper restriction = new ExperienceLocationPincodeMapper();
+            restriction.setPincode(pincode);
+            mapper.addPincodeMapper(restriction);
+            ExperienceLocationPincodeMapper saved = locationPincodeMapperDao.save(restriction);
+            result.add(LocationBeanMapper.mapPincodeToDto(saved.getPincode(), false));
+        }
+        return result;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * @param mapperId  the experience-location mapping identifier
+     * @param pincodeId the pincode to remove from the whitelist
+     * @throws ResourceNotFoundException if the mapping has no restriction for
+     *                                   that pincode
+     */
+    @Override
+    @Transactional
+    public void removePincodeFromMapper(Long mapperId, Long pincodeId) {
+        ExperienceLocationPincodeMapper restriction = locationPincodeMapperDao
+                .findByMapperIdAndPincodeId(mapperId, pincodeId);
+        if (restriction == null) {
+            throw new ResourceNotFoundException(
+                    "No pincode restriction " + pincodeId + " found for mapping " + mapperId);
+        }
+        locationPincodeMapperDao.delete(restriction);
     }
 
     /**

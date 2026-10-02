@@ -74,6 +74,15 @@ public class ExperienceLocationMapper {
     @OneToMany(mappedBy = "experienceLocation", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ExperienceTimeSlotMapper> timeSlotMappers = new HashSet<>();
 
+    /**
+     * Pincode whitelist restricting where this experience-location attachment is
+     * serviceable. Empty = unrestricted (serviceable at every pincode of the
+     * location).
+     * LAZY — only JOIN FETCHed when needed.
+     */
+    @OneToMany(mappedBy = "experienceLocationMapper", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<ExperienceLocationPincodeMapper> pincodeMappers = new HashSet<>();
+
     // ── Getters & Setters ─────────────────────────────────────────────────────
 
     public Long getId() {
@@ -160,5 +169,19 @@ public class ExperienceLocationMapper {
     public void addTimeSlotMapper(ExperienceTimeSlotMapper mapper) {
         timeSlotMappers.add(mapper);
         mapper.setExperienceLocation(this);
+    }
+
+    public Set<ExperienceLocationPincodeMapper> getPincodeMappers() {
+        return pincodeMappers;
+    }
+
+    public void setPincodeMappers(Set<ExperienceLocationPincodeMapper> pincodeMappers) {
+        this.pincodeMappers = pincodeMappers;
+    }
+
+    /** Bidirectional helper — adds a pincode restriction and wires back-reference */
+    public void addPincodeMapper(ExperienceLocationPincodeMapper mapper) {
+        pincodeMappers.add(mapper);
+        mapper.setExperienceLocationMapper(this);
     }
 }

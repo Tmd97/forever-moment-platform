@@ -292,6 +292,58 @@ public class LocationControllerAdmin {
                 ResponseUtil.buildOkResponse(null, "Location-Experience attachment status toggled"));
     }
 
+    // ── Experience-Location Pincode Restriction ─────────────────────────────
+
+    /**
+     * Lists the pincode whitelist restricting an experience-location mapping. An
+     * empty list means the attachment is unrestricted — serviceable at every
+     * pincode of the mapping's location.
+     *
+     * @param mapperId identifier of the experience-location mapping
+     * @return {@code 200 OK} wrapping the list of {@link PincodeResponseDto}
+     */
+    @GetMapping("/experience-mappings/{mapperId}/pincodes")
+    @Operation(summary = "Get Pincode Restrictions", description = "Lists the pincode whitelist for an experience-location mapping. Empty = unrestricted (all pincodes of the location)")
+    public ResponseEntity<ApiResponse<?>> getPincodesForMapper(@PathVariable Long mapperId) {
+        List<PincodeResponseDto> response = locationService.getPincodesForMapper(mapperId);
+        return ResponseEntity.ok(ResponseUtil.buildOkResponse(response, AppConstants.MSG_FETCHED));
+    }
+
+    /**
+     * Replaces the pincode whitelist restricting an experience-location mapping.
+     *
+     * @param mapperId   identifier of the experience-location mapping
+     * @param pincodeIds the new set of restricting pincode ids; empty clears all
+     *                   restrictions
+     * @return {@code 200 OK} wrapping the new list of {@link PincodeResponseDto}
+     */
+    @PutMapping("/experience-mappings/{mapperId}/pincodes")
+    @Operation(summary = "Replace Pincode Restrictions", description = "Replaces the pincode whitelist for an experience-location mapping. "
+            + "Each pincode must belong to the mapping's own location. Empty body clears all restrictions.")
+    public ResponseEntity<ApiResponse<?>> replacePincodesForMapper(
+            @PathVariable Long mapperId,
+            @RequestBody List<Long> pincodeIds) {
+        List<PincodeResponseDto> response = locationService.replacePincodesForMapper(mapperId, pincodeIds);
+        return ResponseEntity.ok(ResponseUtil.buildOkResponse(response, AppConstants.MSG_UPDATED));
+    }
+
+    /**
+     * Removes a single pincode from an experience-location mapping's restriction
+     * set.
+     *
+     * @param mapperId  identifier of the experience-location mapping
+     * @param pincodeId identifier of the pincode to remove from the whitelist
+     * @return {@code 200 OK} with an empty payload
+     */
+    @DeleteMapping("/experience-mappings/{mapperId}/pincodes/{pincodeId}")
+    @Operation(summary = "Remove Pincode Restriction", description = "Removes a single pincode from an experience-location mapping's whitelist")
+    public ResponseEntity<ApiResponse<?>> removePincodeFromMapper(
+            @PathVariable Long mapperId,
+            @PathVariable Long pincodeId) {
+        locationService.removePincodeFromMapper(mapperId, pincodeId);
+        return ResponseEntity.ok(ResponseUtil.buildOkResponse(null, AppConstants.MSG_DELETED));
+    }
+
     /**
      * Moves a location to a new 1-based display position, shifting the locations it
      * passes over so positions stay contiguous.
