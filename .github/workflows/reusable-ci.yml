@@ -1,0 +1,127 @@
+# This reusable workflow is the shared CI engine for Java services.
+# Other repositories can call this workflow instead of duplicating CI logic.
+name: Reusable Java CI
+
+on:
+  # workflow_call means this file is invoked by another workflow's "uses:".
+  workflow_call:
+    inputs:
+      # Friendly service label only used in logs/readability.
+      service_name:
+        description: Service name for log readability.
+        required: true
+        type: string
+      # Full Docker image repository in "username/repository" format.
+      dockerhub_repository:
+        description: Docker image repository, for example groote123/moment-forever-platform.
+        required: true
+        type: string
+      # Java version used by setup-java.
+      java_version:
+        description: Java version used for build and tests.
+        required: false
+        default: "17"
+        type: string
+      # Maven command arguments run from repository root.
+      maven_verify_args:
+        description: Maven arguments for build and tests.
+        required: false
+        default: "-B -ntp clean verify"
+        type: string
+      # Dockerfile location relative to repository root.
+      dockerfile_path:
+        description: Path to Dockerfile.
+        required: false
+        default: "Dockerfile"
+        type: string
+      # Controls whether the workflow publishes latest tag on main branch.
+      push_latest_on_main:
+        description: Push latest tag when branch is main.
+        required: false
+        default: true
+        type: boolean
+    secrets:
+      # Docker Hub credentials are passed from caller repository secrets.
+      DOCKERHUB_USERNAME:
+        required: true
+      DOCKERHUB_TOKEN:
+        required: true
+
+jobs:
+  ci:
+    name: Build, test, and publish image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      # Step 1: download repository source code for this run.
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      # Step 2: install Java and enable Maven dependency cache.
+      - name: Set up Java with Maven cache
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java_version }}
+          cache: maven
+
+      # Step 3: prefer Maven wrapper when present, otherwise use system Maven.
+      - name: Resolve Maven command (wrapper first)
+        id: maven-cmd
+        shell: bash
+        run: |
+          if [ -f "./mvnw" ]; then
+            chmod +x ./mvnw
+            echo "cmd=./mvnw" >> "$GITHUB_OUTPUT"
+          else
+            echo "cmd=mvn" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Step 4: run build and tests from repository root.
+      - name: Build and test
+        shell: bash
+        run: ${{ steps.maven-cmd.outputs.cmd }} ${{ inputs.maven_verify_args }}
+
+      # Step 5: optional placeholder for dependency/security scanning tools.
+      - name: Dependency/security scan placeholder (optional)
+        shell: bash
+        run: |
+          echo "Placeholder: add security/dependency scanner here (for example Trivy, Snyk, or OWASP Dependency-Check)."
+          echo "This workflow intentionally avoids deployment commands."
+
+      # Step 6: build local Docker image first so failures are caught before push.
+      - name: Build Docker image (CI validation)
+        shell: bash
+        run: |
+          docker build \
+            --file "${{ inputs.dockerfile_path }}" \
+            --tag "${{ inputs.service_name }}-ci-local:${GITHUB_SHA}" \
+            .
+
+      # Step 7: login to Docker Hub only on push events, not pull requests.
+      - name: Log in to Docker Hub
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Step 8: publish immutable SHA tag so each commit maps to one image.
+      - name: Push immutable commit SHA tag
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          SHA_TAG="${{ inputs.dockerhub_repository }}:${GITHUB_SHA}"
+          docker tag "${{ inputs.service_name }}-ci-local:${GITHUB_SHA}" "${SHA_TAG}"
+          docker push "${SHA_TAG}"
+
+      # Step 9: optionally update latest tag only for pushes to main branch.
+      - name: Push latest tag on main (optional)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && inputs.push_latest_on_main
+        shell: bash
+        run: |
+          LATEST_TAG="${{ inputs.dockerhub_repository }}:latest"
+          docker tag "${{ inputs.service_name }}-ci-local:${GITHUB_SHA}" "${LATEST_TAG}"
+          docker push "${LATEST_TAG}"

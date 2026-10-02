@@ -3,14 +3,22 @@ package com.forvmom.common.dto.response;
 import java.util.ArrayList;
 import java.util.List;
 
-public class CategoryResponseDto extends NamedEntityDto {
+public class CategoryResponseDto extends NamedEntityDto implements CatalogMediaCarrier {
 
     private String description;
     private String slug;
     private String icon;
+    private Long mediaId;
+    private String fileName;
+    private String storageFileName;
+    private String altText;
+    private String heroUrl;
+    private String thumbnailUrl;
+    private String originalUrl;
     private Long displayOrder;
     private Boolean isActive;
     private List<SubCategoryResponseDto> subCategories = new ArrayList<>();
+    private List<ExperienceMediaResponseDto> media = new ArrayList<>();
 
     public CategoryResponseDto() {}
 
@@ -38,6 +46,62 @@ public class CategoryResponseDto extends NamedEntityDto {
         this.icon = icon;
     }
 
+    public Long getMediaId() {
+        return mediaId;
+    }
+
+    public void setMediaId(Long mediaId) {
+        this.mediaId = mediaId;
+    }
+
+    public String getFileName() {
+        return fileName;
+    }
+
+    public void setFileName(String fileName) {
+        this.fileName = fileName;
+    }
+
+    public String getStorageFileName() {
+        return storageFileName;
+    }
+
+    public void setStorageFileName(String storageFileName) {
+        this.storageFileName = storageFileName;
+    }
+
+    public String getAltText() {
+        return altText;
+    }
+
+    public void setAltText(String altText) {
+        this.altText = altText;
+    }
+
+    public String getHeroUrl() {
+        return heroUrl;
+    }
+
+    public void setHeroUrl(String heroUrl) {
+        this.heroUrl = heroUrl;
+    }
+
+    public String getThumbnailUrl() {
+        return thumbnailUrl;
+    }
+
+    public void setThumbnailUrl(String thumbnailUrl) {
+        this.thumbnailUrl = thumbnailUrl;
+    }
+
+    public String getOriginalUrl() {
+        return originalUrl;
+    }
+
+    public void setOriginalUrl(String originalUrl) {
+        this.originalUrl = originalUrl;
+    }
+
     public Long getDisplayOrder() {
         return displayOrder;
     }
@@ -60,5 +124,13 @@ public class CategoryResponseDto extends NamedEntityDto {
 
     public void setSubCategories(List<SubCategoryResponseDto> subCategories) {
         this.subCategories = subCategories;
+    }
+
+    public List<ExperienceMediaResponseDto> getMedia() {
+        return media;
+    }
+
+    public void setMedia(List<ExperienceMediaResponseDto> media) {
+        this.media = media;
     }
 }

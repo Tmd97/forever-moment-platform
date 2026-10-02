@@ -44,6 +44,9 @@ public class CategoryService extends ReorderingService {
     @Autowired
     private ReorderingService reorderingService;
 
+    @Autowired
+    private CatalogMediaService catalogMediaService;
+
     // TODO remove from request the display Order, as backend have done set and
     // return
     /**
@@ -104,7 +107,9 @@ public class CategoryService extends ReorderingService {
         if (category == null) {
             throw new ResourceNotFoundException("Category with given Id " + id + " is not exist");
         }
-        return CategoryBeanMapper.mapEntityToDto(category);
+        CategoryResponseDto response = CategoryBeanMapper.mapEntityToDto(category);
+        catalogMediaService.enrichCategoryResponses(java.util.Collections.singletonList(response));
+        return response;
     }
 
     /**
@@ -119,9 +124,11 @@ public class CategoryService extends ReorderingService {
         if (categories == null || categories.isEmpty()) {
             return new ArrayList<>();
         } else {
-            return categories.stream()
+            List<CategoryResponseDto> responses = categories.stream()
                     .map(CategoryBeanMapper::mapEntityToDto)
                     .toList();
+            catalogMediaService.enrichCategoryResponses(responses);
+            return responses;
         }
     }
 

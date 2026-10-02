@@ -52,6 +52,9 @@ public class LocationServiceImpl implements LocationService {
     private CatalogCacheService catalogCacheService;
 
     @Autowired
+    private ImageFlowCacheService imageFlowCacheService;
+
+    @Autowired
     private CategoryDao categoryDao;
 
     @Autowired
@@ -114,6 +117,7 @@ public class LocationServiceImpl implements LocationService {
 
         LocationBeanMapper.mapDtoToEntity(requestDto, existing);
         Location updated = locationDao.update(existing);
+        imageFlowCacheService.evictAllExperienceDetails();
         return LocationBeanMapper.mapEntityToDto(updated);
     }
 
@@ -200,6 +204,7 @@ public class LocationServiceImpl implements LocationService {
             throw new ResourceNotFoundException("Location not found with id " + id);
         }
         locationDao.delete(existing);
+        imageFlowCacheService.evictAllExperienceDetails();
         return true;
     }
 
@@ -218,6 +223,7 @@ public class LocationServiceImpl implements LocationService {
         }
         existing.setActive(!existing.isActive());
         locationDao.update(existing);
+        imageFlowCacheService.evictAllExperienceDetails();
     }
 
     // ─── Pincode operations ───────────────────────────────────────────────────
@@ -410,6 +416,7 @@ public class LocationServiceImpl implements LocationService {
 
         ExperienceLocationMapper savedMapper = locationMapperDao.save(mapper);
         catalogCacheService.warmLocationCache(savedMapper);
+        imageFlowCacheService.evictExperienceDetail(experienceId);
 
         return ExperienceBeanMapper.mapLocationMapperToDto(savedMapper);
     }
@@ -436,6 +443,7 @@ public class LocationServiceImpl implements LocationService {
         }
         locationMapperDao.delete(mapper);
         catalogCacheService.evictLocation(experienceId, locationId);
+        imageFlowCacheService.evictExperienceDetail(experienceId);
     }
 
     /**
@@ -487,6 +495,7 @@ public class LocationServiceImpl implements LocationService {
 
         ExperienceLocationMapper updated = locationMapperDao.update(mapper);
         catalogCacheService.warmLocationCache(updated);
+        imageFlowCacheService.evictExperienceDetail(experienceId);
 
         return ExperienceBeanMapper.mapLocationMapperToDto(updated);
     }
@@ -510,6 +519,7 @@ public class LocationServiceImpl implements LocationService {
         mapper.setIsActive(!Boolean.TRUE.equals(mapper.getIsActive()));
         ExperienceLocationMapper updated = locationMapperDao.update(mapper);
         catalogCacheService.warmLocationCache(updated);
+        imageFlowCacheService.evictExperienceDetail(updated.getExperience().getId());
     }
 
     /**

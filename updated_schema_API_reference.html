@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MomentForever — Updated Schema & API Reference</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #22263a;
+    --border: #2e3250;
+    --accent: #7c6af7;
+    --accent2: #5eead4;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --green: #4ade80;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --code-bg: #0d1117;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    display: flex;
+  }
+  /* ── SIDEBAR TOC ── */
+  #toc {
+    width: 270px;
+    min-width: 270px;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    overflow-y: auto;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 24px 16px;
+  }
+  #toc h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--accent);
+    margin-bottom: 16px;
+    font-weight: 700;
+  }
+  #toc a {
+    display: block;
+    color: var(--muted);
+    text-decoration: none;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 13px;
+    transition: all 0.15s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #toc a:hover { background: var(--surface2); color: var(--text); }
+  #toc a.h2 { font-weight: 600; color: var(--text); margin-top: 10px; }
+  #toc a.h3 { padding-left: 20px; }
+  #toc a.h4 { padding-left: 34px; font-size: 12px; }
+  /* ── MAIN CONTENT ── */
+  #content {
+    flex: 1;
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 48px 40px 80px;
+    overflow-x: hidden;
+  }
+  h1 {
+    font-size: 2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+  h2 {
+    font-size: 1.4rem;
+    color: var(--accent2);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    margin: 48px 0 20px;
+  }
+  h3 {
+    font-size: 1.1rem;
+    color: #a5b4fc;
+    margin: 32px 0 12px;
+  }
+  h4 {
+    font-size: 0.95rem;
+    color: var(--muted);
+    margin: 20px 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  p { margin: 10px 0; color: var(--text); }
+  a { color: var(--accent); }
+  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+  /* ── TABLES ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 24px;
+    font-size: 13.5px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  thead { background: var(--surface2); }
+  th {
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--accent2);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(124,106,247,0.05); }
+  /* ── CODE ── */
+  code {
+    background: var(--code-bg);
+    color: #e879f9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+    font-size: 13px;
+    border: 1px solid var(--border);
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    overflow-x: auto;
+    margin: 12px 0 20px;
+  }
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #93c5fd;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  /* ── BLOCKQUOTES / ALERTS ── */
+  blockquote {
+    border-left: 4px solid var(--accent);
+    background: rgba(124,106,247,0.08);
+    padding: 12px 18px;
+    border-radius: 0 8px 8px 0;
+    margin: 16px 0;
+    color: var(--muted);
+    font-style: italic;
+  }
+  blockquote p { color: var(--muted); margin: 0; }
+  /* ── MERMAID DIAGRAM ── */
+  .mermaid {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin: 24px 0;
+    overflow-x: auto;
+    text-align: center;
+  }
+  /* ── BADGES in tables ── */
+  td:first-child code { color: #7dd3fc; }
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+  /* ── METHOD BADGES ── */
+  .method-get    { color: #4ade80; font-weight: 700; }
+  .method-post   { color: #60a5fa; font-weight: 700; }
+  .method-put    { color: #fbbf24; font-weight: 700; }
+  .method-delete { color: #f87171; font-weight: 700; }
+  .method-patch  { color: #c084fc; font-weight: 700; }
+</style>
+</head>
+<body>
+
+<nav id="toc">
+  <h2>📋 Contents</h2>
+  <div id="toc-links"></div>
+</nav>
+
+<main id="content">
+  <div id="rendered"></div>
+</main>
+
+<script>
+mermaid.initialize({
+  startOnLoad: false,
+  theme: 'dark',
+  themeVariables: {
+    primaryColor: '#1a1d27',
+    primaryTextColor: '#e2e8f0',
+    primaryBorderColor: '#7c6af7',
+    lineColor: '#5eead4',
+    secondaryColor: '#22263a',
+    tertiaryColor: '#0f1117',
+    edgeLabelBackground: '#1a1d27',
+    fontFamily: 'Segoe UI, system-ui, sans-serif',
+  },
+  er: { diagramPadding: 30, useMaxWidth: true },
+});
+
+const md = `# MomentForever — Master Schema & API Reference (Updated v2)
+
+> **This is the updated reference.** It extends the original schema with two additions: the \`MediaVariant\` asset (image-variant URLs: ORIGINAL/HERO/THUMB) and the proposed \`ExperienceLocationPincode\` restriction (per-pincode serviceability within a location). Everything else is unchanged from the original doc.
+
+---
+
+## Table of Contents
+1. [Entity List](#1-entity-list)
+2. [Entity Field Reference](#2-entity-field-reference)
+3. [ER Diagram](#3-er-diagram)
+4. [API Reference — CRUD](#4-api-reference--crud)
+5. [Discovery & Filtering APIs](#5-discovery--filtering-apis)
+
+---
+
+## 1. Entity List
+
+| # | Entity | Table Name | Type | Purpose |
+|---|---|---|---|---|
+| 1 | \`Category\` | \`categories\` | Master | Top-level grouping of experiences |
+| 2 | \`SubCategory\` | \`sub_categories\` | Master | Child grouping under a category |
+| 3 | \`Experience\` | \`experiences\` | Core | Minimal identity record — what users browse and book |
+| 4 | \`ExperienceDetail\` | \`experience_details\` | 1:1 Detail | All rich content and operational config for an experience |
+| 5 | \`Inclusion\` | \`inclusions\` | Master | Reusable inclusion items (what’s included / not included) |
+| 6 | \`ExperienceInclusionMapper\` | \`experience_inclusion_mappers\` | Junction M:M | Links experiences to inclusion items with display order and active flag |
+| 7 | \`CancellationPolicy\` | \`cancellation_policies\` | Master | Reusable cancellation policy statements |
+| 8 | \`ExperienceCancellationMapper\` | \`experience_cancellation_mappers\` | Junction M:M | Links experiences to cancellation policies with display order and active flag |
+| 9 | \`Media\` | \`media\` | Asset | Reusable image/video file metadata |
+| 10 | \`ExperienceMediaMapper\` | \`experience_media_mappers\` | Junction M:M | Links experiences to media assets |
+| 11 | \`Addon\` | \`addons\` | Master | Optional add-ons (e.g. cake, photographer) |
+| 12 | \`ExperienceAddonMapper\` | \`experience_addon_mappers\` | Junction M:M | Links add-ons to experiences with price override |
+| 13 | \`Review\` | \`reviews\` | Child | User reviews and ratings on an experience |
+| 14 | \`Location\` | \`locations\` | Master | A city/area where experiences are offered |
+| 15 | \`Pincode\` | \`pincodes\` | Child | A specific pincode within a location |
+| 16 | \`ExperienceLocationMapper\` | \`experience_location_mappers\` | Junction M:M | Links experiences to locations with price override |
+| 17 | \`TimeSlot\` | \`time_slots\` | Master | Reusable time slot definition (Morning, Evening etc.) |
+| 18 | \`ExperienceTimeSlotMapper\` | \`experience_timeslot_mappers\` | Junction | Links a timeslot to a specific experience+location with override |
+| 19 | \`ExperiencePincodePrice\` | \`experience_pincode_prices\` | Override | Final price override at pincode+timeslot level |
+| 20 | \`MediaVariant\` | \`media_variants\` | Asset (new) | Derived renditions (ORIGINAL/HERO/THUMB) of a \`Media\` row, with their own storage path and dimensions |
+| 21 | \`ExperienceLocationPincode\` | \`experience_location_pincodes\` | Junction M:M (proposed, not yet implemented) | Optional per-pincode serviceability restriction for an \`ExperienceLocationMapper\`; empty = serviceable at all pincodes in that location |
+
+---
+
+## 2. Entity Field Reference
+
+---
+
+### 2.1 \`Category\`
+> Top-level grouping. Example: *Celebrations*, *Adventure*, *Dining*.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key, auto-increment |
+| \`name\` | VARCHAR(100) | No | Display name of the category |
+| \`slug\` | VARCHAR(120) | No | URL-friendly unique identifier (e.g. \`celebrations\`) |
+| \`is_active\` | BOOLEAN | No | Whether category is visible on the platform |
+| \`deleted\` | BOOLEAN | No | Soft delete flag (default: false) |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+| \`updated_on\` | DATETIME | No | Auto-set on update |
+
+---
+
+### 2.2 \`SubCategory\`
+> Second-level grouping under a category. Example: *Birthday Decoration*, *Candle Light Dinner*.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`category_id\` | BIGINT FK | No | Parent category |
+| \`name\` | VARCHAR(100) | No | Display name |
+| \`slug\` | VARCHAR(120) | No | URL-friendly unique identifier |
+| \`is_active\` | BOOLEAN | No | Visibility flag |
+| \`deleted\` | BOOLEAN | No | Soft delete flag |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+| \`updated_on\` | DATETIME | No | Auto-set on update |
+
+---
+
+### 2.3 \`Experience\`
+> Minimal identity record. Only fields needed for listing cards and routing. All rich content lives in \`ExperienceDetail\`.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`sub_category_id\` | BIGINT FK | No | Which sub-category this experience belongs to |
+| \`name\` | VARCHAR(200) | No | Display name shown in listings |
+| \`slug\` | VARCHAR(220) | No | Unique URL path (e.g. \`rose-gold-birthday-decoration\`) |
+| \`tag_name\` | VARCHAR(100) | Yes | Short badge label on listing card (e.g. \`Bestseller\`, \`New\`) |
+| \`base_price\` | DECIMAL(10,2) | No | Default price before any location/timeslot override |
+| \`display_order\` | INT | No | Admin-controlled listing sort rank (default: 0) |
+| \`is_featured\` | BOOLEAN | No | Pin to featured section on homepage |
+| \`is_active\` | BOOLEAN | No | Whether the experience is live and bookable |
+| \`deleted\` | BOOLEAN | No | Soft delete flag |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+| \`updated_on\` | DATETIME | No | Auto-set on update |
+
+---
+
+### 2.4 \`ExperienceDetail\`
+> One-to-one extension of Experience holding all rich content and operational config. \`UNIQUE(experience_id)\` enforces the 1:1 relationship.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`experience_id\` | BIGINT FK UNIQUE | No | Links to parent Experience (UNIQUE enforces 1:1) |
+| \`short_description\` | VARCHAR(500) | Yes | 1–2 line teaser shown on listing cards |
+| \`description\` | TEXT | Yes | Full rich-text description on detail page |
+| \`duration_minutes\` | INT | Yes | How long the experience lasts (e.g. \`120\` = 2 hours) |
+| \`max_capacity\` | INT | Yes | Maximum number of people the experience can serve |
+| \`min_age\` | INT | Yes | Minimum age requirement for participants |
+| \`completion_time\` | INT | Yes | Minutes the team needs to setup at venue before client arrival |
+| \`min_hours\` | INT | Yes | Minimum hours gap required between booking time and slot start |
+| \`terms_conditions\` | TEXT | Yes | Full terms and conditions |
+| \`what_to_bring\` | TEXT | Yes | Instructions for the customer on what to prepare |
+| \`is_active\` | BOOLEAN | No | Detail record active flag |
+| \`deleted\` | BOOLEAN | No | Soft delete flag |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+| \`updated_on\` | DATETIME | No | Auto-set on update |
+
+---
+
+### 2.5 \`Inclusion\`
+> Master list of reusable items describing what is included (✓) or not included (✗). Example: *200 Rosegold balloons*.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`description\` | TEXT | No | The inclusion item text |
+| \`is_included\` | BOOLEAN | No | \`true\` = green ✓ (included), \`false\` = red ✗ (not included) |
+| \`is_active\` | BOOLEAN | No | Global visibility of this item |
+| \`deleted\` | BOOLEAN | No | Soft delete flag |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+| \`updated_on\` | DATETIME | No | Auto-set on update |
+
+---
+
+### 2.6 \`ExperienceInclusionMapper\`
+> Junction table linking experiences to inclusion items (M:M). Controls ordering and activation per experience.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`experience_id\` | BIGINT FK | No | The experience |
+| \`inclusion_id\` | BIGINT FK | No | The inclusion item |
+| \`display_order\` | INT | No | Controls sort order in the list (default: 0) |
+| \`is_active\` | BOOLEAN | No | Show/hide this item for this experience (default: true) |
+| \`deleted\` | BOOLEAN | No | Soft delete flag (default: false) |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+| \`updated_on\` | DATETIME | No | Auto-set on update |
+
+---
+
+### 2.7 \`CancellationPolicy\`
+> Master list of reusable cancellation policy statements. Each has a description and a flag indicating if it’s a favourable rule (✓) or restrictive rule (✗).
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`description\` | TEXT | No | One policy rule (e.g. \`Full refund if cancelled 48 hours before\`) |
+| \`is_included\` | BOOLEAN | No | \`true\` = favourable rule ✓, \`false\` = restrictive rule ✗ |
+| \`is_active\` | BOOLEAN | No | Global visibility of this policy statement |
+| \`deleted\` | BOOLEAN | No | Soft delete flag |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+| \`updated_on\` | DATETIME | No | Auto-set on update |
+
+---
+
+### 2.8 \`ExperienceCancellationMapper\`
+> Junction table linking experiences to cancellation policies (M:M). Controls ordering and activation per experience.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`experience_id\` | BIGINT FK | No | The experience |
+| \`policy_id\` | BIGINT FK | No | The cancellation policy |
+| \`display_order\` | INT | No | Controls sort order in the list (default: 0) |
+| \`is_active\` | BOOLEAN | No | Show/hide this policy for this experience (default: true) |
+| \`deleted\` | BOOLEAN | No | Soft delete flag (default: false) |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+| \`updated_on\` | DATETIME | No | Auto-set on update |
+
+---
+
+### 2.9 \`Media\`
+> Central repository for all uploaded image/video files. Decoupled from any single experience so assets can be reused.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`file_name\` | VARCHAR(255) | No | Original uploaded file name |
+| \`file_path\` | VARCHAR(500) | No | Storage path or URL (S3 key or GridFS path) |
+| \`media_type\` | VARCHAR(20) | No | \`IMAGE\` or \`VIDEO\` |
+| \`mime_type\` | VARCHAR(100) | Yes | MIME type (e.g. \`image/jpeg\`, \`video/mp4\`) |
+| \`file_size_bytes\` | BIGINT | Yes | File size in bytes |
+| \`alt_text\` | VARCHAR(300) | Yes | Accessibility alt text / SEO description |
+| \`is_active\` | BOOLEAN | No | Availability flag |
+| \`deleted\` | BOOLEAN | No | Soft delete flag |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+
+---
+
+### 2.10 \`ExperienceMediaMapper\`
+> Junction table linking experiences to media assets (M:M). Controls ordering and primary/cover designation.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`experience_id\` | BIGINT FK | No | The experience this media belongs to |
+| \`media_id\` | BIGINT FK | No | The media asset |
+| \`position\` | INT | No | Sort order within the experience gallery |
+| \`is_primary\` | BOOLEAN | No | \`true\` = shown as the main thumbnail in listings |
+| \`is_cover\` | BOOLEAN | No | \`true\` = used as the hero banner on detail page |
+| \`deleted\` | BOOLEAN | No | Soft delete flag |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+
+---
+
+### 2.11 \`Addon\`
+> Master list of optional extras that can be attached to experiences (e.g. *Birthday Cake*, *Photographer*, *Flower Bouquet*).
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`name\` | VARCHAR(150) | No | Display name of the add-on |
+| \`description\` | TEXT | Yes | What is included in this add-on |
+| \`icon\` | VARCHAR(200) | Yes | Icon URL or identifier |
+| \`base_price\` | DECIMAL(10,2) | No | Default price if no override is set |
+| \`is_active\` | BOOLEAN | No | Whether this add-on is offered globally |
+| \`deleted\` | BOOLEAN | No | Soft delete flag |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+| \`updated_on\` | DATETIME | No | Auto-set on update |
+
+---
+
+### 2.12 \`ExperienceAddonMapper\`
+> Links add-ons to experiences. Allows price override and free-addon designation per experience.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`experience_id\` | BIGINT FK | No | The experience |
+| \`addon_id\` | BIGINT FK | No | The add-on |
+| \`price_override\` | DECIMAL(10,2) | Yes | Custom price for this add-on on this experience; \`null\` = use \`Addon.base_price\` |
+| \`is_free\` | BOOLEAN | No | \`true\` = add-on is complimentary for this experience |
+| \`is_active\` | BOOLEAN | No | Whether this add-on is offered on this experience |
+| \`deleted\` | BOOLEAN | No | Soft delete flag |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+
+---
+
+### 2.13 \`Review\`
+> Customer reviews and ratings submitted after an experience.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`experience_id\` | BIGINT FK | No | Experience being reviewed |
+| \`user_id\` | BIGINT FK | Yes | Authenticated user who wrote review; \`null\` if guest review |
+| \`title\` | VARCHAR(150) | Yes | Review headline |
+| \`rating\` | INT | No | Score from 1 (worst) to 5 (best) |
+| \`comment\` | TEXT | Yes | Full review body text |
+| \`reviewer_name\` | VARCHAR(100) | Yes | Display name (used for guest reviews) |
+| \`reviewer_email\` | VARCHAR(150) | Yes | Email (for guest reviews, not shown publicly) |
+| \`helpful_count\` | INT | No | Number of users who marked this review as helpful (default: 0) |
+| \`is_approved\` | BOOLEAN | No | Admin approval before going public (default: false) |
+| \`deleted\` | BOOLEAN | No | Soft delete flag |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+| \`updated_on\` | DATETIME | No | Auto-set on update |
+
+---
+
+### 2.14 \`Location\`
+> A city or geographic area where experiences are available.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`name\` | VARCHAR(150) | No | Display name (e.g. \`South Delhi\`) |
+| \`city\` | VARCHAR(100) | No | City name (e.g. \`Delhi\`) |
+| \`state\` | VARCHAR(100) | Yes | State name (e.g. \`Delhi NCR\`) |
+| \`country\` | VARCHAR(100) | No | Country (default: \`India\`) |
+| \`address\` | VARCHAR(300) | Yes | Street/area descriptor for the location |
+| \`latitude\` | DECIMAL(10,6) | Yes | Geo-coordinate for map display |
+| \`longitude\` | DECIMAL(10,6) | Yes | Geo-coordinate for map display |
+| \`is_active\` | BOOLEAN | No | Whether this location is currently served |
+| \`deleted\` | BOOLEAN | No | Soft delete flag |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+| \`updated_on\` | DATETIME | No | Auto-set on update |
+
+---
+
+### 2.15 \`Pincode\`
+> A specific postal pincode within a location. Used for the most granular level of pricing.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`location_id\` | BIGINT FK | No | Parent location this pincode belongs to |
+| \`pincode_code\` | VARCHAR(20) | No | The actual postal code (e.g. \`110001\`) |
+| \`area_name\` | VARCHAR(150) | Yes | Human-readable area name (e.g. \`Connaught Place\`) |
+| \`latitude\` | DECIMAL(10,6) | Yes | Optional geo-coordinate of pincode centroid |
+| \`longitude\` | DECIMAL(10,6) | Yes | Optional geo-coordinate of pincode centroid |
+| \`is_active\` | BOOLEAN | No | Whether this pincode is serviceable |
+| \`deleted\` | BOOLEAN | No | Soft delete flag |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+
+---
+
+### 2.16 \`ExperienceLocationMapper\`
+> Links an experience to a location with an optional price override. This is **Level 2** of the dynamic pricing chain.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`experience_id\` | BIGINT FK | No | The experience |
+| \`location_id\` | BIGINT FK | No | The location |
+| \`price_override\` | DECIMAL(10,2) | Yes | Price for this experience at this location; \`null\` = use \`Experience.base_price\` |
+| \`is_active\` | BOOLEAN | No | Whether this experience is available at this location |
+| \`valid_from\` | DATE | Yes | Start date from which this mapping is valid |
+| \`valid_to\` | DATE | Yes | End date after which this mapping expires |
+| \`deleted\` | BOOLEAN | No | Soft delete flag |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+| \`updated_on\` | DATETIME | No | Auto-set on update |
+
+---
+
+### 2.17 \`TimeSlot\`
+> Master list of reusable time slots. Admin-managed. Examples: *Morning 7–9am*, *Evening 5–7pm*.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`label\` | VARCHAR(100) | No | Display label (e.g. \`Morning Slot\`, \`Golden Hour\`) |
+| \`start_time\` | TIME | No | Slot start time |
+| \`end_time\` | TIME | No | Slot end time |
+| \`is_active\` | BOOLEAN | No | Whether this slot is usable |
+| \`deleted\` | BOOLEAN | No | Soft delete flag |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+
+---
+
+### 2.18 \`ExperienceTimeSlotMapper\`
+> Links a time slot to a specific experience+location (\`ExperienceLocationMapper\`). Adds capacity management and **Level 3** price override.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`exp_location_id\` | BIGINT FK | No | References \`ExperienceLocationMapper.id\` — ties slot to a specific experience AT a specific location |
+| \`timeslot_id\` | BIGINT FK | No | References \`TimeSlot.id\` |
+| \`price_override\` | DECIMAL(10,2) | Yes | Price for this slot at this location; \`null\` = use \`ExperienceLocationMapper\` price |
+| \`max_capacity\` | INT | Yes | Max bookings allowed per slot; overrides \`ExperienceDetail.max_capacity\` if set |
+| \`current_bookings\` | INT | No | Live counter of confirmed bookings in this slot (default: 0) |
+| \`is_active\` | BOOLEAN | No | Whether this slot is available for booking |
+| \`valid_from\` | DATE | Yes | Date from which this slot is valid |
+| \`valid_to\` | DATE | Yes | Date after which this slot expires |
+| \`deleted\` | BOOLEAN | No | Soft delete flag |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+| \`updated_on\` | DATETIME | No | Auto-set on update |
+
+---
+
+### 2.19 \`ExperiencePincodePrice\`
+> Most granular pricing level. Overrides price for a specific pincode within a specific timeslot. **Level 4** of pricing.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`exp_timeslot_id\` | BIGINT FK | No | References \`ExperienceTimeSlotMapper.id\` |
+| \`pincode_id\` | BIGINT FK | No | The specific pincode for which this price applies |
+| \`price_override\` | DECIMAL(10,2) | No | Final resolved price for this pincode at this slot |
+| \`is_active\` | BOOLEAN | No | Whether this pincode price is active |
+| \`valid_from\` | DATE | Yes | Date from which pincode price is valid |
+| \`valid_to\` | DATE | Yes | Date after which pincode price expires |
+| \`deleted\` | BOOLEAN | No | Soft delete flag |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+| \`updated_on\` | DATETIME | No | Auto-set on update |
+
+---
+
+### 2.20 \`MediaVariant\` *(new)*
+> Derived renditions of a \`Media\` row, generated by the centralized Image Service on upload. Each \`Media\` has one row per variant type; response DTOs resolve display URLs from here instead of the raw \`Media.file_path\`.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`media_id\` | BIGINT FK | No | The parent \`Media\` row this variant was derived from |
+| \`variant_type\` | VARCHAR(20) | No | \`ORIGINAL\`, \`HERO\`, or \`THUMB\`; unique together with \`media_id\` |
+| \`storage_file_name\` | VARCHAR(500) | No | Unique generated file name for this rendition |
+| \`file_path\` | VARCHAR(500) | No | Storage key/path for this rendition (GridFS id or S3 key) |
+| \`mime_type\` | VARCHAR(100) | Yes | MIME type of the rendition |
+| \`file_size_bytes\` | BIGINT | Yes | Size of this rendition in bytes |
+| \`width_px\` | INT | Yes | Rendered width in pixels |
+| \`height_px\` | INT | Yes | Rendered height in pixels |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+
+---
+
+### 2.21 \`ExperienceLocationPincode\` *(proposed — not yet implemented)*
+> Discussed design for restricting an \`ExperienceLocationMapper\` to a subset of pincodes within its location (e.g. Experience E1 serviceable only in a few Delhi pincodes, while E2 is serviceable in others). No rows for a mapper = serviceable at **all** pincodes of that location (backward compatible default); one or more rows = whitelist restriction. Not built yet — this section documents the agreed design for future reference.
+
+| Field | Type | Nullable | Meaning |
+|---|---|---|---|
+| \`id\` | BIGINT | No | Primary key |
+| \`experience_location_mapper_id\` | BIGINT FK | No | References \`ExperienceLocationMapper.id\` — the experience+location pair being restricted |
+| \`pincode_id\` | BIGINT FK | No | A specific pincode (must belong to the same location as the mapper) where this experience is serviceable |
+| \`is_active\` | BOOLEAN | No | Whether this restriction row is in effect |
+| \`deleted\` | BOOLEAN | No | Soft delete flag |
+| \`created_on\` | DATETIME | No | Auto-set on insert |
+
+---
+
+## 3. ER Diagram
+
+\`\`\`mermaid
+erDiagram
+
+    %% ── CATEGORY TREE ───────────────────────────────────────────────
+    Category {
+        bigint id PK
+        string name
+        string slug
+        boolean is_active
+        boolean deleted
+        datetime created_on
+        datetime updated_on
+    }
+    SubCategory {
+        bigint id PK
+        string name
+        string slug
+        bigint category_id FK
+        boolean is_active
+        boolean deleted
+        datetime created_on
+        datetime updated_on
+    }
+    Category ||--o{ SubCategory : "has"
+
+    %% ── EXPERIENCE (core + 1:1 detail) ──────────────────────────────
+    Experience {
+        bigint id PK
+        bigint sub_category_id FK
+        string name
+        string slug
+        string tag_name
+        decimal base_price
+        int display_order
+        boolean is_featured
+        boolean is_active
+        boolean deleted
+        datetime created_on
+        datetime updated_on
+    }
+    ExperienceDetail {
+        bigint id PK
+        bigint experience_id FK "UNIQUE"
+        string short_description
+        text description
+        int duration_minutes
+        int max_capacity
+        int min_age
+        int completion_time
+        int min_hours
+        text terms_conditions
+        text what_to_bring
+        boolean is_active
+        boolean deleted
+        datetime created_on
+        datetime updated_on
+    }
+    SubCategory ||--o{ Experience : "has"
+    Experience ||--|| ExperienceDetail : "has detail"
+
+    %% ── INCLUSIONS (M:M via mapper) ─────────────────────────────────
+    Inclusion {
+        bigint id PK
+        text description
+        boolean is_included
+        boolean is_active
+        boolean deleted
+        datetime created_on
+        datetime updated_on
+    }
+    ExperienceInclusionMapper {
+        bigint id PK
+        bigint experience_id FK
+        bigint inclusion_id FK
+        int display_order
+        boolean is_active
+        boolean deleted
+        datetime created_on
+        datetime updated_on
+    }
+    Experience ||--o{ ExperienceInclusionMapper : "has"
+    Inclusion ||--o{ ExperienceInclusionMapper : "used in"
+
+    %% ── CANCELLATION POLICIES (M:M via mapper) ──────────────────────
+    CancellationPolicy {
+        bigint id PK
+        text description
+        boolean is_included
+        boolean is_active
+        boolean deleted
+        datetime created_on
+        datetime updated_on
+    }
+    ExperienceCancellationMapper {
+        bigint id PK
+        bigint experience_id FK
+        bigint policy_id FK
+        int display_order
+        boolean is_active
+        boolean deleted
+        datetime created_on
+        datetime updated_on
+    }
+    Experience ||--o{ ExperienceCancellationMapper : "has"
+    CancellationPolicy ||--o{ ExperienceCancellationMapper : "used in"
+
+    %% ── MEDIA (M:M) ─────────────────────────────────────────────────
+    Media {
+        bigint id PK
+        string file_name
+        string file_path
+        string media_type
+        string mime_type
+        bigint file_size_bytes
+        string alt_text
+        boolean is_active
+        boolean deleted
+        datetime created_on
+    }
+    ExperienceMediaMapper {
+        bigint id PK
+        bigint experience_id FK
+        bigint media_id FK
+        int position
+        boolean is_primary
+        boolean is_cover
+        boolean deleted
+        datetime created_on
+    }
+    Experience ||--o{ ExperienceMediaMapper : "has media"
+    Media ||--o{ ExperienceMediaMapper : "used in"
+
+    %% ── MEDIA VARIANTS (new) ─────────────────────────────────────────
+    MediaVariant {
+        bigint id PK
+        bigint media_id FK
+        string variant_type "ORIGINAL | HERO | THUMB"
+        string storage_file_name
+        string file_path
+        string mime_type
+        bigint file_size_bytes
+        int width_px
+        int height_px
+        datetime created_on
+    }
+    Media ||--o{ MediaVariant : "has variants"
+
+    %% ── ADDONS (M:M) ────────────────────────────────────────────────
+    Addon {
+        bigint id PK
+        string name
+        text description
+        string icon
+        decimal base_price
+        boolean is_active
+        boolean deleted
+        datetime created_on
+        datetime updated_on
+    }
+    ExperienceAddonMapper {
+        bigint id PK
+        bigint experience_id FK
+        bigint addon_id FK
+        decimal price_override
+        boolean is_free
+        boolean is_active
+        boolean deleted
+        datetime created_on
+    }
+    Experience ||--o{ ExperienceAddonMapper : "has addons"
+    Addon ||--o{ ExperienceAddonMapper : "used in"
+
+    %% ── REVIEWS ─────────────────────────────────────────────────────
+    Review {
+        bigint id PK
+        bigint experience_id FK
+        bigint user_id FK
+        string title
+        int rating
+        text comment
+        string reviewer_name
+        string reviewer_email
+        int helpful_count
+        boolean is_approved
+        boolean deleted
+        datetime created_on
+        datetime updated_on
+    }
+    Experience ||--o{ Review : "receives"
+
+    %% ── LOCATION + PINCODE ──────────────────────────────────────────
+    Location {
+        bigint id PK
+        string name
+        string city
+        string state
+        string country
+        string address
+        decimal latitude
+        decimal longitude
+        boolean is_active
+        boolean deleted
+        datetime created_on
+        datetime updated_on
+    }
+    Pincode {
+        bigint id PK
+        bigint location_id FK
+        string pincode_code
+        string area_name
+        decimal latitude
+        decimal longitude
+        boolean is_active
+        boolean deleted
+        datetime created_on
+    }
+    Location ||--o{ Pincode : "has"
+
+    %% ── EXPERIENCE ↔ LOCATION (price Level 2) ───────────────────────
+    ExperienceLocationMapper {
+        bigint id PK
+        bigint experience_id FK
+        bigint location_id FK
+        decimal price_override
+        boolean is_active
+        date valid_from
+        date valid_to
+        boolean deleted
+        datetime created_on
+        datetime updated_on
+    }
+    Experience ||--o{ ExperienceLocationMapper : "available at"
+    Location ||--o{ ExperienceLocationMapper : "hosts"
+
+    %% ── EXPERIENCE ↔ LOCATION ↔ PINCODE (proposed, not yet implemented) ──
+    ExperienceLocationPincode {
+        bigint id PK
+        bigint experience_location_mapper_id FK
+        bigint pincode_id FK
+        boolean is_active
+        boolean deleted
+        datetime created_on
+    }
+    ExperienceLocationMapper ||--o{ ExperienceLocationPincode : "optionally restricts to pincodes"
+    Pincode ||--o{ ExperienceLocationPincode : "serviceable via"
+
+    %% ── TIMESLOTS (price Level 3) ───────────────────────────────────
+    TimeSlot {
+        bigint id PK
+        string label
+        time start_time
+        time end_time
+        boolean is_active
+        boolean deleted
+        datetime created_on
+    }
+    ExperienceTimeSlotMapper {
+        bigint id PK
+        bigint exp_location_id FK
+        bigint timeslot_id FK
+        decimal price_override
+        int max_capacity
+        int current_bookings
+        boolean is_active
+        date valid_from
+        date valid_to
+        boolean deleted
+        datetime created_on
+        datetime updated_on
+    }
+    ExperienceLocationMapper ||--o{ ExperienceTimeSlotMapper : "has slots"
+    TimeSlot ||--o{ ExperienceTimeSlotMapper : "used in"
+
+    %% ── PINCODE PRICE (price Level 4) ───────────────────────────────
+    ExperiencePincodePrice {
+        bigint id PK
+        bigint exp_timeslot_id FK
+        bigint pincode_id FK
+        decimal price_override
+        boolean is_active
+        date valid_from
+        date valid_to
+        boolean deleted
+        datetime created_on
+        datetime updated_on
+    }
+    ExperienceTimeSlotMapper ||--o{ ExperiencePincodePrice : "priced by pincode"
+    Pincode ||--o{ ExperiencePincodePrice : "has price"
+\`\`\`
+
+---
+
+## 4. API Reference — CRUD
+
+> **Auth Roles:** \`PUBLIC\` = no auth, \`USER\` = JWT required, \`ADMIN\` = admin JWT required
+
+---
+
+### 4.1 Category APIs
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| \`GET\` | \`/api/categories\` | PUBLIC | List all active categories |
+| \`GET\` | \`/api/categories/{id}\` | PUBLIC | Get category by ID |
+| \`POST\` | \`/api/admin/categories\` | ADMIN | Create a new category |
+| \`PUT\` | \`/api/admin/categories/{id}\` | ADMIN | Update category |
+| \`DELETE\` | \`/api/admin/categories/{id}\` | ADMIN | Soft delete category |
+| \`PATCH\` | \`/api/admin/categories/{id}/toggle\` | ADMIN | Toggle \`is_active\` |
+
+---
+
+### 4.2 SubCategory APIs
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| \`GET\` | \`/api/categories/{categoryId}/sub-categories\` | PUBLIC | List sub-categories under a category |
+| \`GET\` | \`/api/sub-categories/{id}\` | PUBLIC | Get sub-category by ID |
+| \`POST\` | \`/api/admin/sub-categories\` | ADMIN | Create sub-category |
+| \`PUT\` | \`/api/admin/sub-categories/{id}\` | ADMIN | Update sub-category |
+| \`DELETE\` | \`/api/admin/sub-categories/{id}\` | ADMIN | Soft delete sub-category |
+| \`PATCH\` | \`/api/admin/sub-categories/{id}/toggle\` | ADMIN | Toggle \`is_active\` |
+
+---
+
+### 4.3 Experience APIs
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| \`GET\` | \`/api/experiences\` | PUBLIC | List experiences (paginated) |
+| \`GET\` | \`/api/experiences/{id}\` | PUBLIC | Get full experience by ID |
+| \`GET\` | \`/api/experiences/slug/{slug}\` | PUBLIC | Get full experience by slug |
+| \`POST\` | \`/api/admin/experiences\` | ADMIN | Create experience |
+| \`PUT\` | \`/api/admin/experiences/{id}\` | ADMIN | Update experience core fields |
+| \`DELETE\` | \`/api/admin/experiences/{id}\` | ADMIN | Soft delete experience |
+| \`PATCH\` | \`/api/admin/experiences/{id}/toggle\` | ADMIN | Toggle \`is_active\` |
+| \`PATCH\` | \`/api/admin/experiences/{id}/feature\` | ADMIN | Toggle \`is_featured\` |
+| \`PATCH\` | \`/api/admin/experiences/reorder\` | ADMIN | Bulk update \`display_order\` |
+
+#### Experience Detail (1:1)
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| \`GET\` | \`/api/experiences/{id}/detail\` | PUBLIC | Get detail block of an experience |
+| \`PUT\` | \`/api/admin/experiences/{id}/detail\` | ADMIN | Create or update detail (upsert) |
+
+#### Experience Inclusions (M:M)
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| \`GET\` | \`/api/inclusions\` | PUBLIC | List all active master inclusion items |
+| \`POST\` | \`/api/admin/inclusions\` | ADMIN | Create a new master inclusion item |
+| \`PUT\` | \`/api/admin/inclusions/{id}\` | ADMIN | Update a master inclusion item |
+| \`DELETE\` | \`/api/admin/inclusions/{id}\` | ADMIN | Soft delete a master inclusion item |
+| \`GET\` | \`/api/experiences/{id}/inclusions\` | PUBLIC | Get all inclusion items mapped to an experience (with display_order) |
+| \`POST\` | \`/api/admin/experiences/{id}/inclusions\` | ADMIN | Map an inclusion item to the experience (requires \`inclusionId\` and \`displayOrder\`) |
+| \`PUT\` | \`/api/admin/experiences/{id}/inclusions/{mapperId}\` | ADMIN | Update mapping (e.g., \`display_order\`, \`is_active\`) |
+| \`DELETE\` | \`/api/admin/experiences/{id}/inclusions/{mapperId}\` | ADMIN | Unmap (soft delete) inclusion from experience |
+| \`PATCH\` | \`/api/admin/experiences/{id}/inclusions/reorder\` | ADMIN | Bulk reorder inclusion mappings |
+
+#### Cancellation Policies (M:M)
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| \`GET\` | \`/api/cancellation-policies\` | PUBLIC | List all active master policy items |
+| \`POST\` | \`/api/admin/cancellation-policies\` | ADMIN | Create a new master policy item |
+| \`PUT\` | \`/api/admin/cancellation-policies/{id}\` | ADMIN | Update a master policy item |
+| \`DELETE\` | \`/api/admin/cancellation-policies/{id}\` | ADMIN | Soft delete a master policy item |
+| \`GET\` | \`/api/experiences/{id}/cancellation-policies\` | PUBLIC | Get all policy items mapped to an experience (with display_order) |
+| \`POST\` | \`/api/admin/experiences/{id}/cancellation-policies\` | ADMIN | Map a policy item to the experience (requires \`policyId\` and \`displayOrder\`) |
+| \`PUT\` | \`/api/admin/experiences/{id}/cancellation-policies/{mapperId}\` | ADMIN | Update mapping (e.g., \`display_order\`, \`is_active\`) |
+| \`DELETE\` | \`/api/admin/experiences/{id}/cancellation-policies/{mapperId}\` | ADMIN | Unmap (soft delete) policy from experience |
+| \`PATCH\` | \`/api/admin/experiences/{id}/cancellation-policies/reorder\` | ADMIN | Bulk reorder policy mappings |
+
+---
+
+### 4.4 Media APIs
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| \`POST\` | \`/api/admin/media/upload\` | ADMIN | Upload a media file (multipart) |
+| \`GET\` | \`/api/admin/media\` | ADMIN | List all media assets |
+| \`GET\` | \`/api/admin/media/{id}\` | ADMIN | Get media metadata |
+| \`DELETE\` | \`/api/admin/media/{id}\` | ADMIN | Soft delete media asset |
+| \`POST\` | \`/api/admin/experiences/{id}/media\` | ADMIN | Attach a media asset to an experience |
+| \`DELETE\` | \`/api/admin/experiences/{id}/media/{mapperId}\` | ADMIN | Detach media from experience |
+| \`PATCH\` | \`/api/admin/experiences/{id}/media/reorder\` | ADMIN | Reorder media gallery |
+| \`PATCH\` | \`/api/admin/experiences/{id}/media/{mapperId}/primary\` | ADMIN | Set as primary thumbnail |
+| \`PATCH\` | \`/api/admin/experiences/{id}/media/{mapperId}/cover\` | ADMIN | Set as cover image |
+
+---
+
+### 4.5 Addon APIs
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| \`GET\` | \`/api/addons\` | PUBLIC | List all active add-ons |
+| \`POST\` | \`/api/admin/addons\` | ADMIN | Create add-on |
+| \`PUT\` | \`/api/admin/addons/{id}\` | ADMIN | Update add-on |
+| \`DELETE\` | \`/api/admin/addons/{id}\` | ADMIN | Soft delete add-on |
+| \`GET\` | \`/api/experiences/{id}/addons\` | PUBLIC | Get add-ons available for an experience |
+| \`POST\` | \`/api/admin/experiences/{id}/addons\` | ADMIN | Attach add-on to experience |
+| \`PUT\` | \`/api/admin/experiences/{id}/addons/{mapperId}\` | ADMIN | Update add-on mapping (price override, is_free) |
+| \`DELETE\` | \`/api/admin/experiences/{id}/addons/{mapperId}\` | ADMIN | Detach add-on from experience |
+
+---
+
+### 4.6 Review APIs
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| \`GET\` | \`/api/experiences/{id}/reviews\` | PUBLIC | List approved reviews for an experience |
+| \`POST\` | \`/api/experiences/{id}/reviews\` | USER | Submit a review |
+| \`GET\` | \`/api/admin/reviews\` | ADMIN | List all reviews (including unapproved) |
+| \`PATCH\` | \`/api/admin/reviews/{id}/approve\` | ADMIN | Approve a review |
+| \`DELETE\` | \`/api/admin/reviews/{id}\` | ADMIN | Soft delete a review |
+| \`POST\` | \`/api/reviews/{id}/helpful\` | USER | Mark a review as helpful |
+
+---
+
+### 4.7 Location APIs
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| \`GET\` | \`/api/locations\` | PUBLIC | List all active locations |
+| \`GET\` | \`/api/locations/{id}\` | PUBLIC | Get location details |
+| \`POST\` | \`/api/admin/locations\` | ADMIN | Create location |
+| \`PUT\` | \`/api/admin/locations/{id}\` | ADMIN | Update location |
+| \`DELETE\` | \`/api/admin/locations/{id}\` | ADMIN | Soft delete location |
+| \`PATCH\` | \`/api/admin/locations/{id}/toggle\` | ADMIN | Toggle \`is_active\` |
+
+#### Pincode APIs
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| \`GET\` | \`/api/locations/{locationId}/pincodes\` | PUBLIC | List pincodes under a location |
+| \`POST\` | \`/api/admin/locations/{locationId}/pincodes\` | ADMIN | Add pincode to location |
+| \`PUT\` | \`/api/admin/pincodes/{id}\` | ADMIN | Update pincode |
+| \`DELETE\` | \`/api/admin/pincodes/{id}\` | ADMIN | Soft delete pincode |
+
+---
+
+### 4.8 Experience ↔ Location Mapping APIs
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| \`GET\` | \`/api/experiences/{id}/locations\` | PUBLIC | Get all locations where this experience is available |
+| \`POST\` | \`/api/admin/experiences/{id}/locations\` | ADMIN | Link experience to a location |
+| \`PUT\` | \`/api/admin/experiences/{id}/locations/{mapperId}\` | ADMIN | Update price override or validity dates |
+| \`DELETE\` | \`/api/admin/experiences/{id}/locations/{mapperId}\` | ADMIN | Unlink experience from location |
+
+---
+
+### 4.9 TimeSlot APIs
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| \`GET\` | \`/api/timeslots\` | PUBLIC | List all active time slots |
+| \`POST\` | \`/api/admin/timeslots\` | ADMIN | Create a time slot |
+| \`PUT\` | \`/api/admin/timeslots/{id}\` | ADMIN | Update time slot |
+| \`DELETE\` | \`/api/admin/timeslots/{id}\` | ADMIN | Soft delete time slot |
+| \`GET\` | \`/api/experiences/{id}/locations/{locationId}/slots\` | PUBLIC | Get slots for an experience at a specific location |
+| \`POST\` | \`/api/admin/experience-locations/{mapperId}/slots\` | ADMIN | Assign a slot to an experience+location |
+| \`PUT\` | \`/api/admin/experience-slots/{slotMapperId}\` | ADMIN | Update slot (price override, capacity, dates) |
+| \`DELETE\` | \`/api/admin/experience-slots/{slotMapperId}\` | ADMIN | Remove slot from experience+location |
+
+---
+
+### 4.10 Pincode Price Override APIs
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| \`GET\` | \`/api/experience-slots/{slotMapperId}/pincode-prices\` | ADMIN | List pincode price overrides for a slot |
+| \`POST\` | \`/api/admin/experience-slots/{slotMapperId}/pincode-prices\` | ADMIN | Set price for a pincode on a slot |
+| \`PUT\` | \`/api/admin/pincode-prices/{id}\` | ADMIN | Update pincode price override |
+| \`DELETE\` | \`/api/admin/pincode-prices/{id}\` | ADMIN | Remove pincode price override |
+
+---
+
+## 5. Discovery & Filtering APIs
+
+> These are the read-heavy public-facing APIs that power search, listing pages, and experience detail page.
+
+---
+
+### 5.1 Experience Search & Listing
+
+\`\`\`
+GET /api/experiences/search
+\`\`\`
+
+**Query Parameters:**
+
+| Param | Type | Example | Description |
+|---|---|---|---|
+| \`q\` | string | \`birthday\` | Full-text search across \`name\`, \`short_description\`, \`tag_name\` |
+| \`categoryId\` | long | \`1\` | Filter by category |
+| \`subCategoryId\` | long | \`3\` | Filter by sub-category |
+| \`locationId\` | long | \`5\` | Filter by location |
+| \`pincode\` | string | \`110001\` | Filter by pincode (checks \`ExperienceLocationMapper\` + \`Pincode\`) |
+| \`minPrice\` | decimal | \`499\` | Minimum resolved price |
+| \`maxPrice\` | decimal | \`2999\` | Maximum resolved price |
+| \`date\` | date | \`2026-03-15\` | Filter experiences that have available slots on this date |
+| \`isFeatured\` | boolean | \`true\` | Show only featured experiences |
+| \`rating\` | decimal | \`4\` | Show experiences with average rating ≥ this value |
+| \`sortBy\` | enum | \`price_asc\`, \`price_desc\`, \`rating\`, \`popular\`, \`newest\`, \`display_order\` | Sort order |
+| \`page\` | int | \`0\` | Page number (0-indexed) |
+| \`size\` | int | \`12\` | Page size |
+
+**Example Request:**
+\`\`\`
+GET /api/experiences/search?locationId=5&pincode=110001&categoryId=1&maxPrice=2000&sortBy=rating&page=0&size=12
+\`\`\`
+
+**Response:**
+\`\`\`json
+{
+  "content": [
+    {
+      "id": 42,
+      "name": "Rose Gold Birthday Decoration",
+      "slug": "rose-gold-birthday-decoration",
+      "tagName": "Bestseller",
+      "shortDescription": "Premium balloon decoration...",
+      "resolvedPrice": 1299.00,
+      "basePrice": 1499.00,
+      "rating": 4.8,
+      "reviewCount": 236,
+      "primaryImageUrl": "...",
+      "isFeatured": true
+    }
+  ],
+  "totalElements": 48,
+  "totalPages": 4,
+  "page": 0,
+  "size": 12
+}
+\`\`\`
+
+---
+
+### 5.2 Resolve Final Price for a Booking Selection
+
+> Called when user selects an experience + location + timeslot (+ optional pincode) to get the exact price before booking.
+
+\`\`\`
+GET /api/experiences/{id}/resolve-price
+\`\`\`
+
+**Query Parameters:**
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| \`locationId\` | long | Yes | Selected location |
+| \`slotId\` | long | Yes | Selected \`ExperienceTimeSlotMapper\` ID |
+| \`pincode\` | string | No | If provided, applies Level 4 pincode override |
+
+**Response:**
+\`\`\`json
+{
+  "experienceId": 42,
+  "basePrice": 1499.00,
+  "locationPrice": 1399.00,
+  "slotPrice": 1299.00,
+  "pincodePrice": 1199.00,
+  "finalPrice": 1199.00,
+  "resolvedLevel": "PINCODE"
+}
+\`\`\`
+
+---
+
+### 5.3 Available Slots for a Date
+
+> Returns non-full timeslots for a given experience + location + date.
+
+\`\`\`
+GET /api/experiences/{id}/available-slots
+\`\`\`
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| \`locationId\` | long | Yes | Location |
+| \`date\` | date | Yes | Booking date (yyyy-MM-dd) |
+| \`pincode\` | string | No | Pincode for price display |
+
+**Response:**
+\`\`\`json
+[
+  {
+    "slotMapperId": 17,
+    "label": "Morning Slot",
+    "startTime": "07:00",
+    "endTime": "09:00",
+    "resolvedPrice": 1199.00,
+    "isAvailable": true,
+    "isBlocked": false
+  }
+]
+\`\`\`
+
+> [!NOTE]
+> A slot is blocked if \`current_bookings >= max_capacity\` OR if the booking time is within \`Experience.min_hours\` of \`start_time\`.
+
+---
+
+### 5.4 Experiences by Location (with price)
+
+\`\`\`
+GET /api/locations/{locationId}/experiences
+\`\`\`
+
+Returns all experiences available at a location with their location-level resolved price. Supports same sort/filter params as \`/search\`.
+
+---
+
+### 5.5 Serviceable Locations for an Experience
+
+\`\`\`
+GET /api/experiences/{id}/serviceable-locations
+\`\`\`
+
+Returns all active locations where the experience is available, useful for the location picker on the detail page.
+
+---
+
+### 5.6 Pincode Lookup / Serviceability Check
+
+\`\`\`
+GET /api/locations/check-pincode?pincode=110001
+\`\`\`
+
+**Response:**
+\`\`\`json
+{
+  "pincode": "110001",
+  "areaName": "Connaught Place",
+  "locationId": 5,
+  "locationName": "Central Delhi",
+  "isServiceable": true
+}
+\`\`\`
+
+---
+
+### 5.7 Featured & Homepage Experiences
+
+\`\`\`
+GET /api/experiences/featured
+\`\`\`
+
+Returns experiences with \`is_featured = true\`, ordered by \`display_order\`. Accepts optional \`locationId\` to show location-specific resolved prices.
+
+---
+
+### 5.8 Trending / Popular Experiences
+
+\`\`\`
+GET /api/experiences/trending?locationId=5&limit=10
+\`\`\`
+
+Sorted by a composite score: \`(rating × log(review_count + 1))\` — customizable in service layer.
+
+---
+
+### 5.9 Related Experiences
+
+\`\`\`
+GET /api/experiences/{id}/related?locationId=5&limit=6
+\`\`\`
+
+Returns other experiences in the same sub-category, filtered by location, ordered by \`display_order\`.
+
+---
+
+### 5.10 Admin Reporting Queries
+
+| Endpoint | Description |
+|---|---|
+| \`GET /api/admin/experiences/low-capacity?locationId=5&date=2026-03-15\` | Slots with < 20% capacity remaining |
+| \`GET /api/admin/experiences/{id}/booking-stats\` | Total bookings, revenue, slot fill rate per experience |
+| \`GET /api/admin/locations/{id}/revenue-summary\` | Revenue breakdown by experience per location |
+`;
+
+// Parse markdown with marked
+const renderer = new marked.Renderer();
+marked.setOptions({ renderer, gfm: true, breaks: false });
+document.getElementById('rendered').innerHTML = marked.parse(md);
+
+// Render mermaid blocks
+document.querySelectorAll('pre code.language-mermaid').forEach((el, i) => {
+  const div = document.createElement('div');
+  div.className = 'mermaid';
+  div.textContent = el.textContent;
+  el.parentElement.replaceWith(div);
+});
+mermaid.run();
+
+// Build TOC from headings
+const toc = document.getElementById('toc-links');
+document.querySelectorAll('#rendered h1,h2,h3,h4').forEach(h => {
+  if (!h.id) h.id = h.textContent.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  const a = document.createElement('a');
+  a.href = '#' + h.id;
+  a.textContent = h.textContent;
+  a.className = h.tagName.toLowerCase();
+  toc.appendChild(a);
+});
+
+// Color HTTP method cells in tables
+document.querySelectorAll('td').forEach(td => {
+  const t = td.textContent.trim();
+  if (['GET','POST','PUT','DELETE','PATCH'].includes(t)) {
+    td.innerHTML = `<span class="method-${t.toLowerCase()}">${t}</span>`;
+  }
+});
+</script>
+</body>
+</html>

@@ -70,6 +70,16 @@ public class ImageFlowCacheService {
         redis.delete(experienceDetailKey(experienceId));
     }
 
+    public void evictAllExperienceDetails() {
+        Set<String> keys = redis.keys("exp:detail:*");
+        if (keys == null || keys.isEmpty()) {
+            logger.info("Detail cache eviction: no keys matched pattern exp:detail:*");
+            return;
+        }
+        redis.delete(keys);
+        logger.info("Detail cache eviction: removed {} key(s) for pattern exp:detail:*", keys.size());
+    }
+
     public List<ExperienceHighlightResponseDto> getExperienceListAll() {
         return getExperienceListPayload(experienceListAllNoPaginationKey());
     }

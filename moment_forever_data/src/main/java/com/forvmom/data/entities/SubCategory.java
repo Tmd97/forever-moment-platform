@@ -1,6 +1,8 @@
 package com.forvmom.data.entities;
 
 import jakarta.persistence.*;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "sub_category")
@@ -20,6 +22,9 @@ public class SubCategory extends NamedEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
+
+    @OneToMany(mappedBy = "subCategory", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    private List<SubCategoryMediaMapper> mediaMappers = new ArrayList<>();
 
     public String getDescription() {
         return description;
@@ -51,5 +56,19 @@ public class SubCategory extends NamedEntity {
 
     public Category getCategory() {
         return category;
+    }
+
+    public List<SubCategoryMediaMapper> getMediaMappers() {
+        return mediaMappers;
+    }
+
+    public void addMediaMapper(SubCategoryMediaMapper mediaMapper) {
+        mediaMappers.add(mediaMapper);
+        mediaMapper.setSubCategory(this);
+    }
+
+    public void removeMediaMapper(SubCategoryMediaMapper mediaMapper) {
+        mediaMappers.remove(mediaMapper);
+        mediaMapper.setSubCategory(null);
     }
 }

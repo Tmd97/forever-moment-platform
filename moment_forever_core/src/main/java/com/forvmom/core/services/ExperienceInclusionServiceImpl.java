@@ -28,7 +28,8 @@ import java.util.List;
  *
  * <p>
  * All operations are transactional; reads use {@code readOnly = true}. This
- * service does not touch the Redis catalog cache.
+ * service evicts cached experience-detail payloads after write operations so
+ * inclusion changes are immediately visible in experience reads.
  */
 @Service
 public class ExperienceInclusionServiceImpl implements ExperienceInclusionService {
@@ -41,6 +42,9 @@ public class ExperienceInclusionServiceImpl implements ExperienceInclusionServic
 
     @Autowired
     private ExperienceDao experienceDao;
+
+    @Autowired
+    private ImageFlowCacheService imageFlowCacheService;
 
     /**
      * {@inheritDoc}
@@ -92,7 +96,9 @@ public class ExperienceInclusionServiceImpl implements ExperienceInclusionServic
         if (existing == null)
             throw new ResourceNotFoundException("Inclusion not found: " + id);
         InclusionPolicyBeanMapper.updateInclusionFromRequest(existing, requestDto);
-        return InclusionPolicyBeanMapper.mapInclusionToDto(inclusionDao.update(existing));
+        ExperienceInclusionResponseDto response = InclusionPolicyBeanMapper.mapInclusionToDto(inclusionDao.update(existing));
+        imageFlowCacheService.evictAllExperienceDetails();
+        return response;
     }
 
     /**
@@ -116,6 +122,7 @@ public class ExperienceInclusionServiceImpl implements ExperienceInclusionServic
         // soft-delete master
         inclusionMapperDao.deleteAllByInclusionId(id);
         inclusionDao.delete(existing);
+        imageFlowCacheService.evictAllExperienceDetails();
         return true;
     }
 
@@ -155,6 +162,7 @@ public class ExperienceInclusionServiceImpl implements ExperienceInclusionServic
         // experience.getInclusionMappers().add(mapper)
         experience.addInclusionMapper(mapper);
         inclusionMapperDao.save(mapper);
+        imageFlowCacheService.evictExperienceDetail(experienceId);
     }
 
     /**
@@ -179,6 +187,7 @@ public class ExperienceInclusionServiceImpl implements ExperienceInclusionServic
                     "Inclusion " + inclusionId + " is not attached to experience " + experienceId);
         }
         inclusionMapperDao.delete(mapper);
+        imageFlowCacheService.evictExperienceDetail(experienceId);
     }
 
     /**

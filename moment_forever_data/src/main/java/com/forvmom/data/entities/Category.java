@@ -25,6 +25,9 @@ public class Category extends NamedEntity {
     @OneToMany(mappedBy = "category", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
     private List<SubCategory> subCategories = new ArrayList<>();
 
+    @OneToMany(mappedBy = "category", cascade = CascadeType.ALL, fetch = FetchType.LAZY, orphanRemoval = true)
+    private List<CategoryMediaMapper> mediaMappers = new ArrayList<>();
+
     public String getDescription() {
         return description;
     }
@@ -68,6 +71,20 @@ public class Category extends NamedEntity {
             subCategory.setCategory(null);
         }
         subCategories.clear();
+    }
+
+    public List<CategoryMediaMapper> getMediaMappers() {
+        return mediaMappers;
+    }
+
+    public void addMediaMapper(CategoryMediaMapper mediaMapper) {
+        mediaMappers.add(mediaMapper);
+        mediaMapper.setCategory(this);
+    }
+
+    public void removeMediaMapper(CategoryMediaMapper mediaMapper) {
+        mediaMappers.remove(mediaMapper);
+        mediaMapper.setCategory(null);
     }
 
 }

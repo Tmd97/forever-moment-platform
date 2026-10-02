@@ -42,6 +42,9 @@ public class SubCategoryServiceImpl implements SubCategoryService {
     @Autowired
     private ReorderingService reorderingService;
 
+    @Autowired
+    private CatalogMediaService catalogMediaService;
+
     /**
      * {@inheritDoc}
      *
@@ -140,7 +143,9 @@ public class SubCategoryServiceImpl implements SubCategoryService {
         if (subCategory == null) {
             throw new ResourceNotFoundException("SubCategory with id " + id + " does not exist");
         }
-        return SubCategoryBeanMapper.mapEntityToDto(subCategory);
+        SubCategoryResponseDto response = SubCategoryBeanMapper.mapEntityToDto(subCategory);
+        catalogMediaService.enrichSubCategoryResponses(java.util.Collections.singletonList(response));
+        return response;
     }
 
     /**
@@ -160,7 +165,9 @@ public class SubCategoryServiceImpl implements SubCategoryService {
         if (subCategories.isEmpty()) {
             throw new ResourceNotFoundException("SubCategory with slug '" + slug + "' does not exist");
         }
-        return SubCategoryBeanMapper.mapEntityToDto(subCategories.get(0));
+        SubCategoryResponseDto response = SubCategoryBeanMapper.mapEntityToDto(subCategories.get(0));
+        catalogMediaService.enrichSubCategoryResponses(java.util.Collections.singletonList(response));
+        return response;
     }
 
     /**
@@ -176,9 +183,11 @@ public class SubCategoryServiceImpl implements SubCategoryService {
         if (subCategories == null || subCategories.isEmpty()) {
             return new ArrayList<>();
         } else {
-            return subCategories.stream()
+            List<SubCategoryResponseDto> responses = subCategories.stream()
                     .map(SubCategoryBeanMapper::mapEntityToDto)
                     .toList();
+            catalogMediaService.enrichSubCategoryResponses(responses);
+            return responses;
         }
     }
 
@@ -200,9 +209,11 @@ public class SubCategoryServiceImpl implements SubCategoryService {
         if (subCategories == null || subCategories.isEmpty()) {
             throw new ResourceNotFoundException("No SubCategories found for category id " + categoryId);
         }
-        return subCategories.stream()
+        List<SubCategoryResponseDto> responses = subCategories.stream()
                 .map(SubCategoryBeanMapper::mapEntityToDto)
                 .toList();
+        catalogMediaService.enrichSubCategoryResponses(responses);
+        return responses;
     }
 
     /**

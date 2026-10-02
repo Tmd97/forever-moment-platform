@@ -63,6 +63,9 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
     @Autowired
     private CatalogCacheService catalogCacheService;
 
+    @Autowired
+    private ImageFlowCacheService imageFlowCacheService;
+
     // ── Master TimeSlot CRUD ──────────────────────────────────────────────────
 
     /**
@@ -181,7 +184,9 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
         }
 
         TimeSlotBeanMapper.updateEntityFromDto(entity, requestDto);
-        return TimeSlotBeanMapper.mapEntityToDto(timeSlotDao.update(entity));
+        TimeSlotResponseDto response = TimeSlotBeanMapper.mapEntityToDto(timeSlotDao.update(entity));
+        imageFlowCacheService.evictAllExperienceDetails();
+        return response;
     }
 
     /**
@@ -195,6 +200,7 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
     public void deleteTimeSlot(Long id) {
         TimeSlot entity = findTimeSlotOrThrow(id);
         timeSlotDao.delete(entity);
+        imageFlowCacheService.evictAllExperienceDetails();
     }
 
     /**
@@ -212,6 +218,7 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
         TimeSlot entity = findTimeSlotOrThrow(id);
         entity.setIsActive(!Boolean.TRUE.equals(entity.getIsActive()));
         timeSlotDao.update(entity);
+        imageFlowCacheService.evictAllExperienceDetails();
     }
 
     // ── Experience-Location Attachment ────────────────────────────────────────
@@ -267,6 +274,7 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
 
         ExperienceTimeSlotMapper savedMapper = timeSlotMapperDao.save(mapper);
         catalogCacheService.warmSlotCache(savedMapper);
+        imageFlowCacheService.evictExperienceDetail(experienceId);
 
         return TimeSlotBeanMapper.mapMapperEntityToDto(savedMapper);
     }
@@ -338,6 +346,7 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
         Long mapperId = mapper.getId();
         timeSlotMapperDao.delete(mapper);
         catalogCacheService.evictSlot(mapperId);
+        imageFlowCacheService.evictExperienceDetail(experienceId);
     }
 
     /**
@@ -389,6 +398,7 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
         TimeSlotBeanMapper.updateMapperEntityFromDto(mapper, requestDto);
         ExperienceTimeSlotMapper updated = timeSlotMapperDao.update(mapper);
         catalogCacheService.warmSlotCache(updated);
+        imageFlowCacheService.evictExperienceDetail(experienceId);
         return TimeSlotBeanMapper.mapMapperEntityToDto(updated);
     }
 
@@ -411,6 +421,7 @@ public class ExperienceTimeSlotServiceImpl implements ExperienceTimeSlotService 
         mapper.setIsActive(!Boolean.TRUE.equals(mapper.getIsActive()));
         ExperienceTimeSlotMapper updated = timeSlotMapperDao.update(mapper);
         catalogCacheService.warmSlotCache(updated);
+        imageFlowCacheService.evictExperienceDetail(updated.getExperienceLocation().getExperience().getId());
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

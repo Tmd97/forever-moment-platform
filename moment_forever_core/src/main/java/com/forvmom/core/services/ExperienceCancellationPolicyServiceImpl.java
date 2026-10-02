@@ -28,7 +28,8 @@ import java.util.List;
  *
  * <p>
  * All operations are transactional; reads use {@code readOnly = true}. This
- * service does not touch the Redis catalog cache.
+ * service evicts cached experience-detail payloads after write operations so
+ * cancellation-policy changes are immediately visible in experience reads.
  */
 @Service
 public class ExperienceCancellationPolicyServiceImpl implements ExperienceCancellationPolicyService {
@@ -41,6 +42,9 @@ public class ExperienceCancellationPolicyServiceImpl implements ExperienceCancel
 
     @Autowired
     private ExperienceDao experienceDao;
+
+    @Autowired
+    private ImageFlowCacheService imageFlowCacheService;
 
     /**
      * {@inheritDoc}
@@ -92,7 +96,9 @@ public class ExperienceCancellationPolicyServiceImpl implements ExperienceCancel
         if (existing == null)
             throw new ResourceNotFoundException("Policy not found: " + id);
         InclusionPolicyBeanMapper.updatePolicyFromRequest(existing, requestDto);
-        return InclusionPolicyBeanMapper.mapPolicyToDto(policyDao.update(existing));
+        CancellationPolicyResponseDto response = InclusionPolicyBeanMapper.mapPolicyToDto(policyDao.update(existing));
+        imageFlowCacheService.evictAllExperienceDetails();
+        return response;
     }
 
     /**
@@ -115,6 +121,7 @@ public class ExperienceCancellationPolicyServiceImpl implements ExperienceCancel
         // Soft-delete all junction rows first, then soft-delete master
         policyMapperDao.deleteAllByPolicyId(id);
         policyDao.delete(existing);
+        imageFlowCacheService.evictAllExperienceDetails();
         return true;
     }
 
@@ -153,6 +160,7 @@ public class ExperienceCancellationPolicyServiceImpl implements ExperienceCancel
         mapper.setDisplayOrder(displayOrder != null ? displayOrder : 0);
         experience.addPolicyMapper(mapper);
         policyMapperDao.save(mapper);
+        imageFlowCacheService.evictExperienceDetail(experienceId);
     }
 
     /**
@@ -177,6 +185,7 @@ public class ExperienceCancellationPolicyServiceImpl implements ExperienceCancel
                     "Policy " + policyId + " is not attached to experience " + experienceId);
         }
         policyMapperDao.delete(mapper);
+        imageFlowCacheService.evictExperienceDetail(experienceId);
     }
 
     /**
