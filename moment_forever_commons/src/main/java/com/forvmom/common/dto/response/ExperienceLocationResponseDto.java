@@ -26,18 +26,19 @@ public class ExperienceLocationResponseDto {
     private Double latitude;
     private Double longitude;
 
-    // Per-experience price override (Level 2 pricing — overrides
+    // Per-experience price override (Level 2 pricing â€” overrides
     // Experience.basePrice)
     private BigDecimal priceOverride;
 
     private LocalDate validFrom;
     private LocalDate validTo;
     private Boolean isActive;
+    private String pincodeRestrictionType;
 
     // Nested timeslots attached under this experience-location pair
     private List<ExperienceTimeSlotResponseDto> timeslots;
 
-    // ── Getters & Setters ─────────────────────────────────────────────────────
+    // â”€â”€ Getters & Setters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public Long getMapperId() {
         return mapperId;
@@ -137,6 +138,14 @@ public class ExperienceLocationResponseDto {
 
     public Boolean getIsActive() {
         return isActive;
+    }
+
+    public String getPincodeRestrictionType() {
+        return pincodeRestrictionType;
+    }
+
+    public void setPincodeRestrictionType(String pincodeRestrictionType) {
+        this.pincodeRestrictionType = pincodeRestrictionType;
     }
 
     public void setIsActive(Boolean isActive) {

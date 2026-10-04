@@ -1,5 +1,6 @@
 package com.forvmom.security.config;
 
+import com.forvmom.security.dto.JwtUserDetails;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -24,16 +25,31 @@ public class GatewayHeaderAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         String userId = request.getHeader("X-User-Id");
         String roles = request.getHeader("X-User-Roles");
-        String username=request.getHeader("X-User-Name");
+        String username = request.getHeader("X-User");
+        if (username == null) {
+            username = request.getHeader("X-User-Name");
+        }
 
         if (userId != null && roles != null) {
             List<GrantedAuthority> authorities = Arrays.stream(roles.split(","))
-                    .map(role -> new SimpleGrantedAuthority("ROLE_" + role.trim()))
+                    .map(String::trim)
+                    .filter(role -> !role.isEmpty())
+                    .map(role -> role.startsWith("ROLE_") ? role : "ROLE_" + role)
+                    .map(SimpleGrantedAuthority::new)
                     .collect(Collectors.toList());
 
-            UsernamePasswordAuthenticationToken auth =
-                    new UsernamePasswordAuthenticationToken(userId, null, authorities);
-            SecurityContextHolder.getContext().setAuthentication(auth);
+            try {
+                Long id = Long.parseLong(userId);
+                JwtUserDetails userDetails = new JwtUserDetails(id, username != null ? username : userId, authorities);
+
+                UsernamePasswordAuthenticationToken auth =
+                        new UsernamePasswordAuthenticationToken(userDetails, null, authorities);
+                SecurityContextHolder.getContext().setAuthentication(auth);
+            } catch (NumberFormatException e) {
+                UsernamePasswordAuthenticationToken auth =
+                        new UsernamePasswordAuthenticationToken(userId, null, authorities);
+                SecurityContextHolder.getContext().setAuthentication(auth);
+            }
         }
 
         filterChain.doFilter(request, response);

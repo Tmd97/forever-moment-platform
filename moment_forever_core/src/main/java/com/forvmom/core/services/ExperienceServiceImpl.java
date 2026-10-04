@@ -459,7 +459,7 @@ public class ExperienceServiceImpl implements ExperienceService {
         if (existing == null) {
             throw new ResourceNotFoundException("Experience not found with id " + id);
         }
-        // Soft-delete the experience — @SQLDelete on Experience fires UPDATE; the
+        // Soft-delete the experience â€” @SQLDelete on Experience fires UPDATE; the
         // @OneToMany(cascade=ALL, orphanRemoval=true) on inclusionMappers/policyMappers
         // means Hibernate will also remove the junction rows within the same
         // transaction.
@@ -703,8 +703,17 @@ public class ExperienceServiceImpl implements ExperienceService {
             return true;
         }
 
-        return restrictions.stream()
+        boolean matched = restrictions.stream()
                 .anyMatch(r -> Boolean.TRUE.equals(r.getIsActive())
                         && r.getPincode().getId().equals(pincode.getId()));
+
+        if ("BLACKLIST".equalsIgnoreCase(mapper.getPincodeRestrictionType())
+                || "EXCLUDE".equalsIgnoreCase(mapper.getPincodeRestrictionType())) {
+            // Reverse mode: selected pincodes are DISABLED
+            return !matched;
+        }
+
+        // Whitelist mode: only selected pincodes are ALLOWED
+        return matched;
     }
 }

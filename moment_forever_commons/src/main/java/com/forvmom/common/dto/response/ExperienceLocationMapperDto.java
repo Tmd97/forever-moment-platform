@@ -15,6 +15,7 @@ public class ExperienceLocationMapperDto {
 
     private LocalDate validFrom;
     private LocalDate validTo;
+    private String pincodeRestrictionType;
 
     // Getters & Setters
 
@@ -68,6 +69,14 @@ public class ExperienceLocationMapperDto {
 
     public LocalDate getValidTo() {
         return validTo;
+    }
+
+    public String getPincodeRestrictionType() {
+        return pincodeRestrictionType;
+    }
+
+    public void setPincodeRestrictionType(String pincodeRestrictionType) {
+        this.pincodeRestrictionType = pincodeRestrictionType;
     }
 
     public void setValidTo(LocalDate validTo) {

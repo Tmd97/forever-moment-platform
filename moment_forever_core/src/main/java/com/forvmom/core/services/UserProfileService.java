@@ -24,7 +24,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.swing.text.html.Option;
 import java.util.List;
 import java.util.Optional;
 
@@ -61,6 +60,27 @@ public class UserProfileService {
     @Autowired
     private PasswordConfig passwordEncoder;
 
+    private Long extractAuthUserId(Object o) {
+        if (o instanceof JwtUserDetails) {
+            return ((JwtUserDetails) o).getId();
+        } else if (o instanceof UserDetails) {
+            try {
+                return Long.parseLong(((UserDetails) o).getUsername());
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        } else if (o instanceof String) {
+            try {
+                return Long.parseLong((String) o);
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        } else if (o instanceof Long) {
+            return (Long) o;
+        }
+        return null;
+    }
+
     /**
      * Updates the authenticated user's profile.
      *
@@ -76,39 +96,44 @@ public class UserProfileService {
      */
     @Transactional
     public AppUserResponseDto updateCurrentUserProfile(@Valid UserProfileRequestDto userProfileRequestDto) {
-        Object o = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        if (o instanceof UserDetails) {
-            JwtUserDetails jwtUserDetails = (JwtUserDetails) o;
-            Optional<ApplicationUser> applicationUser = applicationUserDao.findByAuthUserId(jwtUserDetails.getId());
-            if (applicationUser.isEmpty()) {
-                throw new ResourceNotFoundException("User doesn't exist in System");
-            }
-
-
-            // Update fields
-            applicationUser.get().setFullName(userProfileRequestDto.getFullName());
-
-            // Sync email change with AuthUser
-            if (!applicationUser.get().getEmail().equalsIgnoreCase(userProfileRequestDto.getEmail())) {
-                if (authUserDao.existsByUsername(userProfileRequestDto.getEmail())) {
-                    throw new CustomAuthException("Email already in use: " + userProfileRequestDto.getEmail());
-                }
-                AuthUser authUser = applicationUser.get().getAuthUser();
-                authUser.setUsername(userProfileRequestDto.getEmail());
-                authUserDao.save(authUser);
-                applicationUser.get().setEmail(userProfileRequestDto.getEmail());
-            }
-
-            applicationUser.get().setPhoneNumber(userProfileRequestDto.getPhoneNumber());
-            applicationUser.get().setProfilePictureUrl(userProfileRequestDto.getProfilePictureUrl());
-            applicationUser.get().setDateOfBirth(userProfileRequestDto.getDateOfBirth());
-            applicationUser.get().setPreferredCity(userProfileRequestDto.getPreferredCity());
-
-            // Save updated user
-            ApplicationUser updatedUser = applicationUserDao.update(applicationUser.get());
-            return ApplicationUserBeanMapper.mapEntityToDto(updatedUser);
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new CustomAuthException("No authenticated user");
         }
-        throw new RuntimeException("User not authenticated");
+
+        Object o = authentication.getPrincipal();
+        Long authUserId = extractAuthUserId(o);
+        if (authUserId == null) {
+            throw new CustomAuthException("Invalid principal type");
+        }
+
+        Optional<ApplicationUser> applicationUser = applicationUserDao.findByAuthUserId(authUserId);
+        if (applicationUser.isEmpty()) {
+            throw new ResourceNotFoundException("User doesn't exist in System");
+        }
+
+        // Update fields
+        applicationUser.get().setFullName(userProfileRequestDto.getFullName());
+
+        // Sync email change with AuthUser
+        if (!applicationUser.get().getEmail().equalsIgnoreCase(userProfileRequestDto.getEmail())) {
+            if (authUserDao.existsByUsername(userProfileRequestDto.getEmail())) {
+                throw new CustomAuthException("Email already in use: " + userProfileRequestDto.getEmail());
+            }
+            AuthUser authUser = applicationUser.get().getAuthUser();
+            authUser.setUsername(userProfileRequestDto.getEmail());
+            authUserDao.save(authUser);
+            applicationUser.get().setEmail(userProfileRequestDto.getEmail());
+        }
+
+        applicationUser.get().setPhoneNumber(userProfileRequestDto.getPhoneNumber());
+        applicationUser.get().setProfilePictureUrl(userProfileRequestDto.getProfilePictureUrl());
+        applicationUser.get().setDateOfBirth(userProfileRequestDto.getDateOfBirth());
+        applicationUser.get().setPreferredCity(userProfileRequestDto.getPreferredCity());
+
+        // Save updated user
+        ApplicationUser updatedUser = applicationUserDao.update(applicationUser.get());
+        return ApplicationUserBeanMapper.mapEntityToDto(updatedUser);
     }
 
     /**
@@ -120,19 +145,18 @@ public class UserProfileService {
      * @throws ResourceNotFoundException if the principal has no application user
      */
     public AppUserResponseDto getCurrentUserProfile() {
-        // Add null check
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             throw new CustomAuthException("No authenticated user");
         }
 
         Object o = authentication.getPrincipal();
-        if (!(o instanceof UserDetails)) { // Check type before casting
+        Long authUserId = extractAuthUserId(o);
+        if (authUserId == null) {
             throw new CustomAuthException("Invalid principal type");
         }
 
-        JwtUserDetails jwtUserDetails = (JwtUserDetails) o;
-        Optional<ApplicationUser> applicationUser = applicationUserDao.findByAuthUserId(jwtUserDetails.getId());
+        Optional<ApplicationUser> applicationUser = applicationUserDao.findByAuthUserId(authUserId);
         if (applicationUser.isEmpty()) {
             throw new ResourceNotFoundException("User doesn't exist in System");
         }
@@ -158,21 +182,22 @@ public class UserProfileService {
         }
 
         Object o = authentication.getPrincipal();
-        if (!(o instanceof UserDetails)) { // Check type before casting
+        Long authUserId = extractAuthUserId(o);
+        if (authUserId == null) {
             throw new CustomAuthException("Invalid principal type");
         }
 
-        JwtUserDetails jwtUserDetails = (JwtUserDetails) o;
-        Optional<ApplicationUser> applicationUser = applicationUserDao.findByAuthUserId(jwtUserDetails.getId());
-
+        Optional<ApplicationUser> applicationUser = applicationUserDao.findByAuthUserId(authUserId);
         if (applicationUser.isEmpty()) {
             throw new ResourceNotFoundException("User doesn't exist in System");
         }
-        // Verify password before deletion
-        if (!passwordEncoder.passwordEncoder().matches(password, jwtUserDetails.getPassword())) {
+
+        // Verify password before deletion against AuthUser entity
+        AuthUser authUser = applicationUser.get().getAuthUser();
+        if (!passwordEncoder.passwordEncoder().matches(password, authUser.getPassword())) {
             throw new CustomAuthException("Invalid password");
         }
-        authUserDao.delete(applicationUser.get().getAuthUser());
+        authUserDao.delete(authUser);
     }
 
     /**
@@ -191,13 +216,16 @@ public class UserProfileService {
     @Transactional
     public void deactivateCurrentAccount(String refreshToken) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new CustomAuthException("No authenticated user");
+        }
 
         Object o = authentication.getPrincipal();
-        if (!(o instanceof UserDetails)) {
+        Long authUserId = extractAuthUserId(o);
+        if (authUserId == null) {
             throw new CustomAuthException("Invalid principal type");
         }
-        JwtUserDetails jwtUserDetails = (JwtUserDetails) o;
-        Optional<ApplicationUser> applicationUser = applicationUserDao.findByAuthUserId(jwtUserDetails.getId());
+        Optional<ApplicationUser> applicationUser = applicationUserDao.findByAuthUserId(authUserId);
         if (applicationUser.isEmpty()) {
             throw new ResourceNotFoundException("User doesn't exist in System");
         }

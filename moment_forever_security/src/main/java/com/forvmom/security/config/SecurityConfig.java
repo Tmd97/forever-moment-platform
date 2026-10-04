@@ -20,24 +20,16 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 /**
  * SecurityConfig - Main security configuration
- * <p>
- * Configures:
- * 1. Which endpoints are public/protected
- * 2. JWT authentication filter
- * 3. Password encoder
- * 4. UserDetailsService
- * 5. Session management (stateless)
  */
 @Configuration
 @EnableWebSecurity
-@EnableMethodSecurity(securedEnabled = true, // Enables @Secured annotation
-                jsr250Enabled = true, // Enables @RolesAllowed annotation
-                prePostEnabled = true // Enables @PreAuthorize, @PostAuthorize
+@EnableMethodSecurity(securedEnabled = true,
+                jsr250Enabled = true,
+                prePostEnabled = true
 )
 public class SecurityConfig {
 
         private final CustomUserDetailsService userDetailsService;
-        // private final JwtAuthenticationFilter jwtAuthenticationFilter;
         private final PasswordEncoder passwordEncoder;
         private final JwtAuthenticationEntryPoint authenticationEntryPoint;
         private final JwtAccessDeniedHandler accessDeniedHandler;
@@ -45,12 +37,10 @@ public class SecurityConfig {
         @Autowired
         public SecurityConfig(
                         CustomUserDetailsService userDetailsService,
-                        // JwtAuthenticationFilter jwtAuthenticationFilter,
                         PasswordEncoder passwordEncoder,
                         JwtAuthenticationEntryPoint authenticationEntryPoint,
                         JwtAccessDeniedHandler accessDeniedHandler) {
                 this.userDetailsService = userDetailsService;
-                // this.jwtAuthenticationFilter = jwtAuthenticationFilter;
                 this.passwordEncoder = passwordEncoder;
                 this.authenticationEntryPoint = authenticationEntryPoint;
                 this.accessDeniedHandler = accessDeniedHandler;
@@ -64,10 +54,7 @@ public class SecurityConfig {
                                 .exceptionHandling(ex -> ex
                                                 .authenticationEntryPoint(authenticationEntryPoint)
                                                 .accessDeniedHandler(accessDeniedHandler))
-                                // Configure authorization rules - ORDER IS IMPORTANT!
                                 .authorizeHttpRequests(auth -> auth
-                                                // Public endpoints - should come FIRST
-                                                // Request matchers strip the context path automatically
                                                 .requestMatchers(
                                                                 "/auth/**",
                                                                 "/public/**",
@@ -76,12 +63,12 @@ public class SecurityConfig {
                                                                 "/swagger-ui/**",
                                                                 "/swagger-ui.html",
                                                                 "/swagger-resources/**",
-                                                                "/webjars/**", // for Swagger UI assets)
-                                                                "/actuator/**", // Allow Consul health checks
-                                                                "/platform/actuator/**" // Allow Consul health checks
-                                                                                        // with context path
+                                                                "/webjars/**",
+                                                                "/actuator/**",
+                                                                "/platform/actuator/**"
                                                 ).permitAll()
                                                 .requestMatchers("/admin/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                                                .requestMatchers("/vendor/**").hasAnyRole("VENDOR", "ADMIN", "SUPER_ADMIN")
                                                 .requestMatchers(
                                                                 "/user/**",
                                                                 "/booking/**",
@@ -92,20 +79,12 @@ public class SecurityConfig {
                                 .sessionManagement(session -> session
                                                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
-                                // NEW: Add gateway header authentication filter
                                 .addFilterBefore(new GatewayHeaderAuthenticationFilter(),
                                                 UsernamePasswordAuthenticationFilter.class);
-                // REMOVED: jwtAuthenticationFilter as it is now on API gateway
-                // TODO: to inform ankit to use extra headers now
-                // .addFilterBefore(jwtAuthenticationFilter,
-                // UsernamePasswordAuthenticationFilter.class);
 
                 return http.build();
         }
 
-        /**
-         * Authentication provider using our UserDetailsService and PasswordEncoder
-         */
         @Bean
         public AuthenticationProvider authenticationProvider() {
                 DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
@@ -114,9 +93,6 @@ public class SecurityConfig {
                 return authProvider;
         }
 
-        /**
-         * Authentication manager bean
-         */
         @Bean
         public AuthenticationManager authenticationManager(
                         AuthenticationConfiguration config) throws Exception {

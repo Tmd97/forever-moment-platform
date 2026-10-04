@@ -193,7 +193,7 @@ public class LocationControllerAdmin {
         return ResponseEntity.ok(ResponseUtil.buildOkResponse(null, AppConstants.MSG_DELETED));
     }
 
-    // ── Experience Association ────────────────────────────────────────────────
+    // â”€â”€ Experience Association â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Lists the experiences this location is attached to.
@@ -292,11 +292,11 @@ public class LocationControllerAdmin {
                 ResponseUtil.buildOkResponse(null, "Location-Experience attachment status toggled"));
     }
 
-    // ── Experience-Location Pincode Restriction ─────────────────────────────
+    // â”€â”€ Experience-Location Pincode Restriction
 
     /**
      * Lists the pincode whitelist restricting an experience-location mapping. An
-     * empty list means the attachment is unrestricted — serviceable at every
+     * empty list means the attachment is unrestricted â€” serviceable at every
      * pincode of the mapping's location.
      *
      * @param mapperId identifier of the experience-location mapping
@@ -318,12 +318,13 @@ public class LocationControllerAdmin {
      * @return {@code 200 OK} wrapping the new list of {@link PincodeResponseDto}
      */
     @PutMapping("/experience-mappings/{mapperId}/pincodes")
-    @Operation(summary = "Replace Pincode Restrictions", description = "Replaces the pincode whitelist for an experience-location mapping. "
-            + "Each pincode must belong to the mapping's own location. Empty body clears all restrictions.")
+    @Operation(summary = "Replace Pincode Restrictions", description = "Replaces the pincode whitelist or blacklist for an experience-location mapping. "
+            + "Pass mode=BLACKLIST (or EXCLUDE) to disable the selected pincodes, or mode=WHITELIST (default) to allow only the selected pincodes.")
     public ResponseEntity<ApiResponse<?>> replacePincodesForMapper(
             @PathVariable Long mapperId,
+            @RequestParam(required = false, defaultValue = "WHITELIST") String mode,
             @RequestBody List<Long> pincodeIds) {
-        List<PincodeResponseDto> response = locationService.replacePincodesForMapper(mapperId, pincodeIds);
+        List<PincodeResponseDto> response = locationService.replacePincodesForMapper(mapperId, pincodeIds, mode);
         return ResponseEntity.ok(ResponseUtil.buildOkResponse(response, AppConstants.MSG_UPDATED));
     }
 
@@ -359,7 +360,7 @@ public class LocationControllerAdmin {
                 ResponseUtil.buildOkResponse(null, AppConstants.MSG_UPDATED));
     }
 
-    // ── Category Association ───────────────────────────────────────────────
+    // â”€â”€ Category Association â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Lists the categories this location is attached to.
@@ -453,7 +454,7 @@ public class LocationControllerAdmin {
                 ResponseUtil.buildOkResponse(null, "Location-Category attachment status toggled"));
     }
 
-    // ── SubCategory Association ───────────────────────────────────────────
+    // â”€â”€ SubCategory Association â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Lists the sub-categories this location is attached to.

@@ -229,7 +229,7 @@ public class LocationServiceImpl implements LocationService {
         imageFlowCacheService.evictAllExperienceDetails();
     }
 
-    // ─── Pincode operations ───────────────────────────────────────────────────
+    // â”€â”€â”€ Pincode operations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * {@inheritDoc}
@@ -371,7 +371,7 @@ public class LocationServiceImpl implements LocationService {
         return true;
     }
 
-    // ── Experience Association ────────────────────────────────────────────────
+    // â”€â”€ Experience Association â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * {@inheritDoc}
@@ -414,7 +414,7 @@ public class LocationServiceImpl implements LocationService {
         mapper.setValidTo(requestDto.getValidTo());
         mapper.setIsActive(requestDto.getIsActive() != null ? requestDto.getIsActive() : true);
 
-        // Bidirectional helper wires experience → mapper back-reference
+        // Bidirectional helper wires experience â†’ mapper back-reference
         experience.addLocationMapper(mapper);
 
         ExperienceLocationMapper savedMapper = locationMapperDao.save(mapper);
@@ -458,7 +458,7 @@ public class LocationServiceImpl implements LocationService {
     @Override
     @Transactional(readOnly = true)
     public List<ExperienceLocationResponseDto> getExperiencesForLocation(Long locationId) {
-        // Re-uses DAO query keyed by experienceId — but we want by locationId.
+        // Re-uses DAO query keyed by experienceId â€” but we want by locationId.
         // The ExperienceLocationMapperDao.findByExperienceId covers experience-side
         // listing.
         // For location-side we query all mappers and filter; a dedicated DAO method can
@@ -525,7 +525,7 @@ public class LocationServiceImpl implements LocationService {
         imageFlowCacheService.evictExperienceDetail(updated.getExperience().getId());
     }
 
-    // ── Experience-Location Pincode Restriction ────────────────────────────────
+    // â”€â”€ Experience-Location Pincode Restriction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * {@inheritDoc}
@@ -550,7 +550,7 @@ public class LocationServiceImpl implements LocationService {
      * {@inheritDoc}
      *
      * <p>
-     * Every pincode must belong to the mapping's own location — this keeps the
+     * Every pincode must belong to the mapping's own location â€” this keeps the
      * whitelist meaningful, since a pincode from a different location could never
      * resolve to this (experience, location) pair anyway. The old restriction set
      * is soft-deleted before the new one is inserted, so this call is a full
@@ -567,10 +567,20 @@ public class LocationServiceImpl implements LocationService {
     @Override
     @Transactional
     public List<PincodeResponseDto> replacePincodesForMapper(Long mapperId, List<Long> pincodeIds) {
+        return replacePincodesForMapper(mapperId, pincodeIds, "WHITELIST");
+    }
+
+    @Override
+    @Transactional
+    public List<PincodeResponseDto> replacePincodesForMapper(Long mapperId, List<Long> pincodeIds, String mode) {
         ExperienceLocationMapper mapper = locationMapperDao.findById(mapperId);
         if (mapper == null) {
             throw new ResourceNotFoundException("Location mapping not found: " + mapperId);
         }
+
+        String restrictionMode = (mode != null && !mode.isBlank()) ? mode.toUpperCase() : "WHITELIST";
+        mapper.setPincodeRestrictionType(restrictionMode);
+        locationMapperDao.update(mapper);
 
         locationPincodeMapperDao.deleteAllByMapperId(mapperId);
 

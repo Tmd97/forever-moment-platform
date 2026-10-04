@@ -129,7 +129,7 @@ public interface LocationService {
      */
     boolean deletePincode(Long pincodeId);
 
-    // ── Experience Association ────────────────────────────────────────────────
+    // â”€â”€ Experience Association â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Attaches a location to an experience, optionally overriding price and
@@ -181,11 +181,11 @@ public interface LocationService {
      */
     void toggleExperienceAttachmentActive(Long mapperId);
 
-    // ── Experience-Location Pincode Restriction ───────────────────────────────
+    // â”€â”€ Experience-Location Pincode Restriction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     /**
      * Lists the pincode whitelist restricting an experience-location mapping.
-     * An empty result means the attachment is unrestricted — serviceable at
+     * An empty result means the attachment is unrestricted â€” serviceable at
      * every pincode of the mapping's location.
      *
      * @param mapperId the experience-location mapping identifier
@@ -208,6 +208,7 @@ public interface LocationService {
      *                                   mapping's location
      */
     List<PincodeResponseDto> replacePincodesForMapper(Long mapperId, List<Long> pincodeIds);
+    List<PincodeResponseDto> replacePincodesForMapper(Long mapperId, List<Long> pincodeIds, String mode);
 
     /**
      * Removes a single pincode from an experience-location mapping's
