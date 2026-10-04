@@ -1,6 +1,7 @@
 package com.forvmom.core.controller.pub;
 
 import com.forvmom.common.dto.request.CategoryByLocationDto;
+import com.forvmom.common.dto.response.ExperienceLocationResponseDto;
 import com.forvmom.common.dto.response.LocationResponseDto;
 import com.forvmom.common.dto.response.PincodeResponseDto;
 import com.forvmom.common.dto.response.SubCategoryByLocationDto;
@@ -173,5 +174,13 @@ public class LocationController {
             @PathVariable Long pincodeId) {
         locationService.removePincodeFromMapper(mapperId, pincodeId);
         return ResponseEntity.ok(ResponseUtil.buildOkResponse(null, AppConstants.MSG_DELETED));
+    }
+
+    @GetMapping("/{locationId}/experiences")
+    @Operation(summary = "Get Experiences for Location", description = "Lists all experiences this location is attached to")
+    public ResponseEntity<ApiResponse<?>> getExperiencesForLocation(
+            @PathVariable Long locationId) {
+        List<ExperienceLocationResponseDto> response = locationService.getExperiencesForLocation(locationId);
+        return ResponseEntity.ok(ResponseUtil.buildOkResponse(response, AppConstants.MSG_FETCHED));
     }
 }
