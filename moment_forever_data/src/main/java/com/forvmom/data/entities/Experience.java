@@ -38,21 +38,21 @@ public class Experience extends NamedEntity {
 
     /**
      * Junction rows linking this experience to reusable inclusion items.
-     * LAZY — only loaded when explicitly JOIN FETCHed (detail endpoint).
+     * LAZY â€” only loaded when explicitly JOIN FETCHed (detail endpoint).
      */
     @OneToMany(mappedBy = "experience", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ExperienceInclusionMapper> inclusionMappers = new HashSet<>();
 
     /**
      * Junction rows linking this experience to reusable cancellation policy points.
-     * LAZY — only loaded when explicitly JOIN FETCHed (detail endpoint).
+     * LAZY â€” only loaded when explicitly JOIN FETCHed (detail endpoint).
      */
     @OneToMany(mappedBy = "experience", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ExperienceCancellationPolicyMapper> policyMappers = new HashSet<>();
 
     /**
      * Junction rows linking this experience to reusable add-on items.
-     * LAZY — not loaded on list endpoints.
+     * LAZY â€” not loaded on list endpoints.
      */
     @OneToMany(mappedBy = "experience", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ExperienceAddonMapper> addonMappers = new HashSet<>();
@@ -60,17 +60,20 @@ public class Experience extends NamedEntity {
     /**
      * Junction rows linking this experience to locations (each with optional price
      * override).
-     * LAZY — only JOIN FETCHed on the detail endpoint (Query 3 of 3).
+     * LAZY â€” only JOIN FETCHed on the detail endpoint (Query 3 of 3).
      */
     @OneToMany(mappedBy = "experience", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ExperienceLocationMapper> locationMappers = new HashSet<>();
 
     /**
      * Junction rows linking this experience to Media (images/videos).
-     * LAZY — only JOIN FETCHed on the detail/gallery endpoint.
+     * LAZY â€” only JOIN FETCHed on the detail/gallery endpoint.
      */
     @OneToMany(mappedBy = "experience", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<ExperienceMediaMapper> mediaMappers = new HashSet<>();
+
+    @OneToMany(mappedBy = "experience", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<ExperienceCouponMapper> couponMappers = new HashSet<>();
 
     public String getSlug() {
         return slug;
@@ -204,6 +207,19 @@ public class Experience extends NamedEntity {
     /**
      * Adds a media mapper and wires both sides of the bidirectional relationship.
      */
+    public Set<ExperienceCouponMapper> getCouponMappers() {
+        return couponMappers;
+    }
+
+    public void setCouponMappers(Set<ExperienceCouponMapper> couponMappers) {
+        this.couponMappers = couponMappers;
+    }
+
+    public void addCouponMapper(ExperienceCouponMapper mapper) {
+        couponMappers.add(mapper);
+        mapper.setExperience(this);
+    }
+
     public void addMediaMapper(ExperienceMediaMapper mapper) {
         mediaMappers.add(mapper);
         mapper.setExperience(this);
